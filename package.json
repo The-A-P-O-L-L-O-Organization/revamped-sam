@@ -6,6 +6,7 @@
   "private": false,
   "main": "dist/samjs.js",
   "module": "dist/samjs.esm.js",
+  "types": "dist/samjs.d.ts",
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "dev": "rollup -w -c build/config.js --environment TARGET:dev",
@@ -13,18 +14,25 @@
     "dev:esm": "rollup -w -c build/config.js --environment TARGET:esm",
     "guessnum-dev": "rollup -w -c build/config.js --environment TARGET:guessnum-demo-dev",
     "prod": "rollup -w -c build/config.js --environment TARGET:prod",
+    "predev": "node build/types.js",
+    "predev:cjs": "node build/types.js",
+    "predev:esm": "node build/types.js",
+    "preguessnum-dev": "node build/types.js",
+    "preprod": "node build/types.js",
     "build": "node build/build.js",
+    "build:types": "node build/types.js",
     "test": "pnpm t-1 && pnpm t-2 && pnpm t-3 && pnpm t-4 && pnpm t-5",
-    "t-1": "mocha --check-leaks --reporter progress --require @babel/register test/minimum-tests.spec.js",
-    "t-2": "mocha --check-leaks --reporter progress --require @babel/register test/reciter/tests-1.spec.js",
-    "t-3": "mocha --check-leaks --reporter progress --require @babel/register test/reciter/tests-2.spec.js",
-    "t-4": "mocha --check-leaks --reporter progress --require @babel/register test/reciter/tests-3.spec.js",
-    "t-5": "mocha --check-leaks --reporter progress --require @babel/register test/reciter/tests-4.spec.js"
+    "t-1": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/minimum-tests.spec.js",
+    "t-2": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-1.spec.js",
+    "t-3": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-2.spec.js",
+    "t-4": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-3.spec.js",
+    "t-5": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-4.spec.js"
   },
   "dependencies": {},
   "devDependencies": {
     "@babel/core": "^7.0.0",
     "@babel/plugin-transform-runtime": "^7.0.0",
+    "@babel/plugin-transform-typescript": "^7.0.0",
     "@babel/preset-env": "^7.0.0",
     "@babel/register": "^7.0.0",
     "@babel/runtime": "^7.0.0",
@@ -33,7 +41,8 @@
     "chai": "^4.5.0",
     "mocha": "^11.0.0",
     "rollup": "^4.0.0",
-    "terser": "^5.0.0"
+    "terser": "^5.0.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=26",

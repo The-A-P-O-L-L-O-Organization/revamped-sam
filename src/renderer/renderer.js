@@ -1,14 +1,14 @@
 import {
   sampledConsonantValues0,
   sampleTable
-} from './tables.es6';
+} from './tables.js';
 
-import {BREAK, END} from '../common/constants.es6'
+import {BREAK, END} from '../common/constants.js'
 
-import SetMouthThroat from './set-mouth-throat.es6'
-import CreateTransitions from './create-transitions.es6';
-import CreateFrames from './create-frames.es6';
-import CreateOutputBuffer from './output-buffer.es6';
+import SetMouthThroat from './set-mouth-throat.js'
+import CreateTransitions from './create-transitions.js';
+import CreateFrames from './create-frames.js';
+import CreateOutputBuffer from './output-buffer.js';
 /**
  * @param {Array} phonemes
  * @param {Number} [pitch]

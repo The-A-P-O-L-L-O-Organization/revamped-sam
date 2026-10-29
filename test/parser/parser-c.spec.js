@@ -1,5 +1,5 @@
 import { assert } from 'chai'
-import Parser from '../../src/parser/c-conv/parser.es6';
+import Parser from '../../src/parser/c-conv/parser.js';
 
 describe('parser-c', () => {
   [

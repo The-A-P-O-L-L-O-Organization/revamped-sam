@@ -5,7 +5,7 @@ import {
   flags,
   phonemeLengthTable,
   phonemeStressedLengthTable
-} from './tables.es6';
+} from './tables.js';
 
 import {
   pR,
@@ -27,11 +27,11 @@ import {
   FLAG_VOICED,
   FLAG_STOPCONS,
   FLAG_UNVOICED_STOPCONS,
-} from '../constants.es6'
+} from '../constants.js'
 
-import {BREAK, END} from '../../common/constants.es6'
+import {BREAK, END} from '../../common/constants.js'
 
-import {text2Uint8Array} from '../../../src/util/util.es6';
+import {text2Uint8Array} from '../../../src/util/util.js';
 
 function full_match(sign1, sign2) {
   let Y = 0;

@@ -1,9 +1,9 @@
 import {
   PhonemeNameTable,
   phonemeFlags,
-} from './tables.es6';
+} from './tables.js';
 
-import {END} from '../common/constants.es6'
+import {END} from '../common/constants.js'
 
 import {
   FLAG_PUNCT,
@@ -15,12 +15,12 @@ import {
   FLAG_VOICED,
   FLAG_CONSONANT,
   FLAG_VOWEL
-} from './constants.es6'
+} from './constants.js'
 
-import './typehints.es6';
+import './typehints.js';
 
-import { phonemeHasFlag } from "./util.es6";
-import { matchesBitmask } from "../util/util.es6";
+import { phonemeHasFlag } from "./util.js";
+import { matchesBitmask } from "../util/util.js";
 
 /**
  * Applies various rules that adjust the lengths of phonemes

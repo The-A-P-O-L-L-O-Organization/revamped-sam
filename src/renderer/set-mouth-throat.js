@@ -1,4 +1,4 @@
-import {frequencyData} from './tables.es6';
+import {frequencyData} from './tables.js';
 
 // mouth formants (F1) 5..29
 const mouthFormants5_29 = [

@@ -8,7 +8,11 @@
       }
     ]
   ],
-  "plugins": ["@babel/plugin-transform-runtime"],
+  "plugins": [
+    "@babel/plugin-transform-runtime",
+    // Parses/erases TypeScript syntax; no-ops on plain .js files.
+    "@babel/plugin-transform-typescript"
+  ],
   "comments": false,
   "ignore": [
     "dist/*.js"

@@ -122,6 +122,15 @@ works straight from a checkout (and from GitHub Pages). Rebuild it with
 from the sources — CI enforces this by rebuilding and diffing `dist/` on
 every push and pull request.
 
+## TypeScript
+
+The public API surface (`src/index.ts`) is TypeScript; `pnpm build` compiles
+it and ships the public declarations as `dist/samjs.d.ts` (referenced by the
+`"types"` field in package.json), so library consumers get editor
+autocomplete and compile-time option validation (`SingMode` instead of
+`singmode` is rejected, for instance). The synthesis internals remain
+faithful plain-ESM JavaScript, guarded by the golden fixtures.
+
 ## Original docs.
 
 I have bundled a copy of the original manual in this repository, see

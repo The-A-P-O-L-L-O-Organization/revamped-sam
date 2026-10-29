@@ -21,6 +21,10 @@ if (process.argv[2]) {
 build(builds);
 
 function build (builds) {
+  // Compile src/index.ts first so the bundler gets plain ES modules in
+  // build/.ts/ and the public declaration file for dist/.
+  require('./types.js').buildTypes();
+
   let built = 0;
   const total = builds.length;
   const next = () => {

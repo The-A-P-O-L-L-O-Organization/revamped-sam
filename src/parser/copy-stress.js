@@ -1,7 +1,7 @@
-import {END} from '../common/constants.es6'
-import {FLAG_VOWEL, FLAG_CONSONANT} from './constants.es6'
+import {END} from '../common/constants.js'
+import {FLAG_VOWEL, FLAG_CONSONANT} from './constants.js'
 
-import { phonemeHasFlag } from './util.es6';
+import { phonemeHasFlag } from './util.js';
 
 /**
  * Iterates through the phoneme buffer, copying the stress value from

@@ -6,7 +6,7 @@
 
 'use strict';
 import * as tables from './tables.es6';
-import {uint8Array2Text} from '../../../src/util/util.es6';
+import {uint8Array2Text} from '../../../src/util/util.js';
 
 import {
   FLAG_NUMERIC,
@@ -17,7 +17,7 @@ import {
   FLAG_CONSONANT,
   FLAG_VOWEL_OR_Y,
   FLAG_ALPHA_OR_QUOT
-} from '../../../src/reciter/constants.es6'
+} from '../../../src/reciter/constants.js'
 
 const TABLE_PARTITION = 37541; // 92A5 === 1001 0010 1010 0101
 

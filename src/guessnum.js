@@ -1,4 +1,4 @@
-import {SamSpeak as Renderer} from './sam/sam.es6';
+import {SamSpeak as Renderer} from './sam/sam.js';
 
 const lookup_ones = ["WAHN", "TUW5", "THRIY5", "FOHR5", "FAY5V", "SIH5KS", "SEH5VUN", "EY5T", "NAY5N"];
 const lookup_teens = [

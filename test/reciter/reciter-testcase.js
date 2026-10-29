@@ -1,5 +1,5 @@
 import { assert } from 'chai'
-import TextToPhonemes from "../../src/reciter/reciter.es6";
+import TextToPhonemes from "../../src/reciter/reciter.js";
 import TextToPhonemesC from "./c-conv/reciter.es6";
 import loadFixture from '../fixture-reader.js';
 

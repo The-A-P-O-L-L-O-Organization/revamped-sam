@@ -1,12 +1,12 @@
-import {BREAK, END} from '../common/constants.es6'
-import {PhonemeNameTable} from './tables.es6';
-import Parser1 from './parse1.es6';
-import Parser2 from './parse2.es6';
-import AdjustLengths from './adjust-lengths.es6';
-import CopyStress from './copy-stress.es6';
-import SetPhonemeLength from './set-phoneme-length.es6';
-import InsertBreath from './insert-breath.es6';
-import ProlongPlosiveStopConsonantsCode41240 from './prolong-plosive-stop-consonants.es6';
+import {BREAK, END} from '../common/constants.js'
+import {PhonemeNameTable} from './tables.js';
+import Parser1 from './parse1.js';
+import Parser2 from './parse2.js';
+import AdjustLengths from './adjust-lengths.js';
+import CopyStress from './copy-stress.js';
+import SetPhonemeLength from './set-phoneme-length.js';
+import InsertBreath from './insert-breath.js';
+import ProlongPlosiveStopConsonantsCode41240 from './prolong-plosive-stop-consonants.js';
 
 /**
  * Parses speech data.

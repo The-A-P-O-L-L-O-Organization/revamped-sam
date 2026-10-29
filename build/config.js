@@ -27,13 +27,13 @@ const resolve = p => {
 const buildSrc = [
   {
     name: '',
-    entry: 'src/index.es6',
+    entry: 'build/.ts/index.js',
     dest: 'samjs',
     moduleName: 'SamJs',
   },
   {
     name: 'guessnum-demo',
-    entry: 'src/guessnum.es6',
+    entry: 'src/guessnum.js',
     dest: 'guessnum',
     moduleName: 'GuessNum',
   },

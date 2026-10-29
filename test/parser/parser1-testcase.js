@@ -1,5 +1,5 @@
 import { assert } from 'chai'
-import Parser from "../../src/parser/parse1.es6";
+import Parser from "../../src/parser/parse1.js";
 import loadFixture from '../fixture-reader.js';
 
 export default function (files) {

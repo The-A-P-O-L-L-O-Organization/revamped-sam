@@ -1,7 +1,7 @@
 import { assert } from 'chai'
-import {END} from '../../src/common/constants.es6'
+import {END} from '../../src/common/constants.js'
 import loadFixture from '../fixture-reader.js';
-import Renderer from '../../src/renderer/renderer.es6';
+import Renderer from '../../src/renderer/renderer.js';
 
 process.env.NODE_ENV = 'karma-test';
 

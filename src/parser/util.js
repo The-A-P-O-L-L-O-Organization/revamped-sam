@@ -1,6 +1,6 @@
-import {phonemeFlags} from './tables.es6';
+import {phonemeFlags} from './tables.js';
 
-import { matchesBitmask } from '../util/util.es6';
+import { matchesBitmask } from '../util/util.js';
 
 /**
  * Test if a phoneme has the given flag.

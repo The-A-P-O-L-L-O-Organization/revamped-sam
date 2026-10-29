@@ -2,8 +2,8 @@ import {
   ampldata,
   sampledConsonantFlags,
   stressPitch_tab47492,
-} from './tables.es6';
-import {PHONEME_PERIOD, PHONEME_QUESTION} from '../parser/constants.es6';
+} from './tables.js';
+import {PHONEME_PERIOD, PHONEME_QUESTION} from '../parser/constants.js';
 
 const RISING_INFLECTION = 255;
 const FALLING_INFLECTION = 1;

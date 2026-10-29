@@ -15,7 +15,7 @@ export default defineConfig({
       '@': path.resolve(dirname, 'src'),
       // The demo talks directly to the library sources; Vite bundles them
       // with the app instead of the committed dist/ build artifacts.
-      samjs: path.resolve(dirname, '../src/index.es6'),
+      samjs: path.resolve(dirname, '../src/index.ts'),
     },
   },
   build: {

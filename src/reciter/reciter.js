@@ -1,4 +1,4 @@
-import * as tables from './tables.es6';
+import * as tables from './tables.js';
 
 import {
   FLAG_NUMERIC,
@@ -9,7 +9,7 @@ import {
   FLAG_CONSONANT,
   FLAG_VOWEL_OR_Y,
   FLAG_ALPHA_OR_QUOT
-} from './constants.es6'
+} from './constants.js'
 
 /**
  * Test if the char matches against the flags in the reciter table.

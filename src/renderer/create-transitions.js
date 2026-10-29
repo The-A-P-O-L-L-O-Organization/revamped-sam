@@ -1,4 +1,4 @@
-import {blendRank, inBlendLength, outBlendLength} from './tables.es6';
+import {blendRank, inBlendLength, outBlendLength} from './tables.js';
 
 /**
  * CREATE TRANSITIONS.

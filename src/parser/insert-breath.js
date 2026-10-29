@@ -1,7 +1,7 @@
-import {BREAK, END} from '../common/constants.es6'
-import {FLAG_PUNCT} from './constants.es6'
+import {BREAK, END} from '../common/constants.js'
+import {FLAG_PUNCT} from './constants.js'
 
-import { phonemeHasFlag } from "./util.es6";
+import { phonemeHasFlag } from "./util.js";
 
 /**
  *
