@@ -35,14 +35,17 @@ let context = null;
  */
 export function PlayBuffer(audiobuffer) {
   if (null === context) {
+    if (typeof AudioContext === 'undefined') {
+      throw new Error('No player available: this environment has no Web Audio support (AudioContext).');
+    }
     context = new AudioContext();
   }
 
-  if (!context) {
-    if (process.env.NODE_ENV === 'development') {
-      throw new Error('No player available!');
-    }
-    throw new Error();
+  // Browsers create an AudioContext in the "suspended" state if it was not
+  // established in response to a user gesture. Try to resume it before
+  // playing, otherwise the buffer plays silently.
+  if (context.state === 'suspended' && typeof context.resume === 'function') {
+    context.resume();
   }
 
   return Play(context, audiobuffer);
@@ -99,7 +102,10 @@ export function RenderBuffer (audiobuffer) {
 
   //RIFF header
   write(text2Uint8Array('RIFF')); // chunkID
-  write(Uint32ToUint8Array(audiobuffer.length + 12 + 16 + 8 - 8)); // ChunkSize
+  // ChunkSize: whole file size minus the 8 bytes of the "RIFF" header itself:
+  // 4 ("WAVE") + 8 (fmt chunk header) + 16 (fmt chunk) + 8 (data chunk header)
+  // + audiobuffer.length = audiobuffer.length + 36
+  write(Uint32ToUint8Array(audiobuffer.length + 36)); // ChunkSize
   write(text2Uint8Array('WAVE')); // riffType
   //format chunk
   write(text2Uint8Array('fmt '));

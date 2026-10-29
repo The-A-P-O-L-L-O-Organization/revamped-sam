@@ -73,6 +73,9 @@ function SamJs (options) {
    * @return void
    */
   this.download = (text, phonetic) => {
+    if (typeof window === 'undefined') {
+      throw new Error('SamJs.download() requires a browser environment (window/document/Blob). Use buf8() to obtain the raw wave buffer instead.');
+    }
     RenderBuffer(this.buf8(text, phonetic));
   }
 }

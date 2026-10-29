@@ -112,10 +112,7 @@ export default function Parser1(input, addPhoneme, addStress) {
     }
 
     if (match === 0) {
-      if (process.env.NODE_ENV === 'development') {
-        throw Error(`Could not parse char ${sign1}`);
-      }
-      throw Error();
+      throw new Error(`Could not parse char ${sign1}`);
     }
     addStress(match); // Set stress for prior phoneme
   }

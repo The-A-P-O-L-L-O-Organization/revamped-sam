@@ -68,7 +68,6 @@ function reciterRule (ruleString) {
     post = tmp[1]
   ;
 
-  const TCS = ['T', 'C', 'S'];
   const EIY = ['E', 'I', 'Y'];
 
   /**
@@ -95,19 +94,12 @@ function reciterRule (ruleString) {
             if (flagsAt(text, --pos, FLAG_VOICED)) {
               return true;
             }
-            const inputChar = text[pos];
-            // 'H'
-            if (inputChar !== 'H')
-              return false;
-            // FIXME: this is always true?!? is there a "--pos" missing in original code?
-            // Check for 'T', 'C', 'S'
-            if (!isOneOf(inputChar, TCS)) {
-              return false;
-            }
-            if (process.env.NODE_ENV === 'development') {
-              throw new Error('Is always false but happened? ' + inputChar);
-            }
-            return true;
+            // Not voiced, so the rule cannot match. Note: the original 6510
+            // code contained a second check of the same character against
+            // 'H' and then 'T', 'C', 'S' here, which was unreachable dead
+            // code (see the FIXME in the original reciter.c); it always
+            // returned false. That is all that is left to do here.
+            return false;
           },
           // '^' - previous char must be a consonant.
           '^': () => flagsAt(text, --pos, FLAG_CONSONANT),
@@ -160,17 +152,12 @@ function reciterRule (ruleString) {
             if (flagsAt(text, ++pos, FLAG_VOICED)) {
               return true;
             }
-            const inputChar = text[pos];
-            if (inputChar !== 'H') // 'H'
-              return false;
-            // Check for 'T', 'C', 'S'
-            if (!isOneOf(inputChar, TCS))
-              return false;
-            // FIXME: This is illogical and can never be reached. Bug in orig. code? reciter.c:489 (pos37367)
-            if (process.env.NODE_ENV === 'development') {
-              throw new Error('This should not be possible ', inputChar);
-            }
-            return true;
+            // Not voiced, so the rule cannot match. Note: the original 6510
+            // code contained a second check of the same character against
+            // 'H' and 'T', 'C', 'S' here, which was unreachable dead code
+            // (bug in the original code, see reciter.c:489 / pos37367);
+            // it always returned false. That is all that is left to do here.
+            return false;
           },
           // '^' - next char must be a consonant.
           '^': () => flagsAt(text, ++pos, FLAG_CONSONANT),

@@ -19,10 +19,7 @@ export default function CreateOutputBuffer(buffersize) {
     ];
     bufferpos += timetable[oldTimeTableIndex][index];
     if (((bufferpos / 50) | 0) > buffer.length) {
-      if (process.env.NODE_ENV === 'development') {
-        throw new Error(`Buffer overflow, want ${((bufferpos / 50) | 0)} but buffersize is only ${buffer.length}!`);
-      }
-      throw new Error();
+      throw new Error(`Buffer overflow: wanted to write to position ${((bufferpos / 50) | 0)} but the buffer is only ${buffer.length} samples long!`);
     }
     oldTimeTableIndex = index;
     // write a little bit in advance
