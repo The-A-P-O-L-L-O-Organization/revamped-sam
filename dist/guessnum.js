@@ -1,19 +1,23 @@
 /**
- * This is SamJs.js v0.1.2
+ * This is SamJs.js v0.2.0
  *
  * A Javascript port of "SAM Software Automatic Mouth".
  *
- * (c) 2017-2020 Christian Schiffler
+ * Part of the revamped-sam fork:
+ * https://github.com/The-A-P-O-L-L-O-Organization/revamped-sam
+ *
+ * Library port: (c) 2017-2026 Christian Schiffler
+ * Original program: SAM Software Automatic Mouth
+ * (c) 1982 Don't Ask Software (now SoftVoice, Inc.)
  *
  * @link(https://github.com/discordier/sam)
  *
- * @author 2017 Christian Schiffler <c.schiffler@cyberspectrum.de>
  */
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
   typeof define === 'function' && define.amd ? define(factory) :
-  (global = global || self, global.GuessNum = factory());
-}(this, (function () { 'use strict';
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.GuessNum = factory());
+})(this, (function () { 'use strict';
 
   /**
    * Test if a bit is set.
@@ -60,13 +64,17 @@
    */
   function PlayBuffer(audiobuffer) {
     if (null === context) {
+      if (typeof AudioContext === 'undefined') {
+        throw new Error('No player available: this environment has no Web Audio support (AudioContext).');
+      }
       context = new AudioContext();
     }
 
-    if (!context) {
-      {
-        throw new Error('No player available!');
-      }
+    // Browsers create an AudioContext in the "suspended" state if it was not
+    // established in response to a user gesture. Try to resume it before
+    // playing, otherwise the buffer plays silently.
+    if (context.state === 'suspended' && typeof context.resume === 'function') {
+      context.resume();
     }
 
     return Play(context, audiobuffer);
@@ -596,14 +604,6 @@
    */
   function Parser1(input, addPhoneme, addStress) {
     for (var srcPos=0;srcPos<input.length;srcPos++) {
-      {
-        var tmp = input.toLowerCase();
-        console.log(
-          ("processing \"" + (tmp.substr(0, srcPos)) + "%c" + (tmp.substr(srcPos, 2).toUpperCase()) + "%c" + (tmp.substr(srcPos + 2)) + "\""),
-           'color: red;',
-           'color:normal;'
-        );
-      }
       var sign1 = input[srcPos];
       var sign2 = input[srcPos + 1] || '';
       var match = (void 0);
@@ -626,9 +626,7 @@
       }
 
       if (match === 0) {
-        {
-          throw Error(("Could not parse char " + sign1));
-        }
+        throw new Error(("Could not parse char " + sign1));
       }
       addStress(match); // Set stress for prior phoneme
     }
@@ -741,20 +739,17 @@
         case 53: {
           // ALVEOLAR flag set?
           if (phonemeHasFlag(getPhoneme(pos - 1), FLAG_ALVEOLAR)) {
-            { console.log((pos + " RULE: <ALVEOLAR> UW -> <ALVEOLAR> UX")); }
             setPhoneme(pos, 16); // UX
           }
           break;
         }
         // 'CH' Example: CHEW
         case 42: {
-          { console.log((pos + " RULE: CH -> CH CH+1")); }
           insertPhoneme(pos + 1, 43, getStress(pos)); // '**'
           break;
         }
         // 'J*' Example: JAY
         case 44: {
-          { console.log((pos + " RULE: J -> J J+1")); }
           insertPhoneme(pos + 1, 45, getStress(pos)); // '**'
           break;
         }
@@ -762,9 +757,6 @@
     };
 
     var changeAX = function (position, suffix) {
-      {
-        console.log((position + " RULE: " + (PhonemeNameTable[getPhoneme(position)]) + " -> AX " + (PhonemeNameTable[suffix])));
-      }
       setPhoneme(position, 13); // 'AX'
       insertPhoneme(position + 1, suffix, getStress(position));
     };
@@ -779,16 +771,6 @@
       }
 
       if (phonemeHasFlag(phoneme, FLAG_DIPTHONG)) {
-        // <DIPHTHONG ENDING WITH WX> -> <DIPHTHONG ENDING WITH WX> WX
-        // <DIPHTHONG NOT ENDING WITH WX> -> <DIPHTHONG NOT ENDING WITH WX> YX
-        // Example: OIL, COW
-        {
-          console.log(
-            !phonemeHasFlag(phoneme, FLAG_DIP_YX)
-              ? (pos + " RULE: insert WX following diphthong NOT ending in IY sound")
-              : (pos + " RULE: insert YX following diphthong ending in IY sound")
-          );
-        }
         // If ends with IY, use YX, else use WX
         // Insert at WX or YX following, copying the stress
         // 'WX' = 20 'YX' = 21
@@ -821,9 +803,6 @@
         if (!getPhoneme(pos+1)) { // If following phoneme is a pause, get next
           phoneme = getPhoneme(pos+2);
           if (phoneme !== END && phonemeHasFlag(phoneme, FLAG_VOWEL) && getStress(pos+2)) {
-            {
-              console.log(((pos+2) + " RULE: Insert glottal stop between two stressed vowels with space between them"));
-            }
             insertPhoneme(pos+2, 31, 0); // 31 = 'Q'
           }
         }
@@ -836,21 +815,15 @@
         // RULES FOR PHONEMES BEFORE R
         switch (priorPhoneme) {
           case pT: {
-            // Example: TRACK
-            { console.log((pos + " RULE: T* R* -> CH R*")); }
             setPhoneme(pos - 1, 42); // 'T*' 'R*' -> 'CH' 'R*'
             break;
           }
           case pD: {
-            // Example: DRY
-            { console.log((pos + " RULE: D* R* -> J* R*")); }
             setPhoneme(pos - 1, 44); // 'J*'
             break;
           }
           default: {
             if (phonemeHasFlag(priorPhoneme, FLAG_VOWEL)) {
-              // Example: ART
-              { console.log((pos + " <VOWEL> R* -> <VOWEL> RX")); }
               setPhoneme(pos, 18); // 'RX'
             }
           }
@@ -860,17 +833,11 @@
 
       // 'L*'
       if ((phoneme === 24) && phonemeHasFlag(priorPhoneme, FLAG_VOWEL)) {
-        // Example: ALL
-        { console.log((pos + " <VOWEL> L* -> <VOWEL> LX")); }
         setPhoneme(pos, 19); // 'LX'
         continue;
       }
       // 'G*' 'S*'
       if (priorPhoneme === 60 && phoneme === 32) {
-        // Can't get to fire -
-        //       1. The G -> GX rule intervenes
-        //       2. Reciter already replaces GS -> GZ
-        { console.log((pos + " G S -> G Z")); }
         setPhoneme(pos, 38);
         continue;
       }
@@ -882,12 +849,6 @@
         var phoneme$1 = getPhoneme(pos + 1);
         // If diphthong ending with YX, move continue processing next phoneme
         if (!phonemeHasFlag(phoneme$1, FLAG_DIP_YX) && (phoneme$1 !== END)) {
-          // replace G with GX and continue processing next phoneme
-          {
-            console.log(
-              (pos + " RULE: G <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> GX <VOWEL OR DIPTHONG NOT ENDING WITH IY>")
-            );
-          }
           setPhoneme(pos, 63); // 'GX'
         }
         continue;
@@ -900,10 +861,6 @@
         var Y = getPhoneme(pos + 1);
         // If at end, replace current phoneme with KX
         if (!phonemeHasFlag(Y, FLAG_DIP_YX) || Y === END) {
-          // VOWELS AND DIPHTHONGS ENDING WITH IY SOUND flag set?
-          {
-            console.log((pos + " K <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> KX <VOWEL OR DIPTHONG NOT ENDING WITH IY>"));
-          }
           setPhoneme(pos, 75);
           phoneme  = 75;
         }
@@ -911,17 +868,6 @@
 
       // Replace with softer version?
       if (phonemeHasFlag(phoneme, FLAG_UNVOICED_STOPCONS) && (priorPhoneme === 32)) { // 'S*'
-        // RULE:
-        //   'S*' 'P*' -> 'S*' 'B*'
-        //   'S*' 'T*' -> 'S*' 'D*'
-        //   'S*' 'K*' -> 'S*' 'G*'
-        //   'S*' 'KX' -> 'S*' 'GX'
-        //   'S*' 'UM' -> 'S*' '**'
-        //   'S*' 'UN' -> 'S*' '**'
-        // Examples: SPY, STY, SKY, SCOWL
-        {
-          console.log((pos + " RULE: S* " + (PhonemeNameTable[phoneme]) + " -> S* " + (PhonemeNameTable[phoneme-12])));
-        }
         setPhoneme(pos, phoneme - 12);
       } else if (!phonemeHasFlag(phoneme, FLAG_UNVOICED_STOPCONS)) {
         handleUW_CH_J(phoneme, pos);
@@ -940,17 +886,10 @@
             phoneme = getPhoneme(pos + 2);
           }
           if (phonemeHasFlag(phoneme, FLAG_VOWEL) && !getStress(pos+1)) {
-            {
-              console.log((pos + " Soften T or D following vowel or ER and preceding a pause -> DX"));
-            }
             setPhoneme(pos, 30);
           }
         }
         continue;
-      }
-
-      {
-        console.log((pos + ": " + (PhonemeNameTable[phoneme])));
       }
     } // while
   }
@@ -973,9 +912,6 @@
    * @return undefined
    */
   function AdjustLengths(getPhoneme, setLength, getLength) {
-    {
-      console.log("AdjustLengths()");
-    }
 
     // LENGTHEN VOWELS PRECEDING PUNCTUATION
     //
@@ -1002,16 +938,6 @@
         // test for not fricative/unvoiced or not voiced
         if(!phonemeHasFlag(getPhoneme(position), FLAG_FRICATIVE) || phonemeHasFlag(getPhoneme(position), FLAG_VOICED)) {
           var A = getLength(position);
-          // change phoneme length to (length * 1.5) + 1
-          {
-            console.log(
-              position + ' RULE: Lengthen <!FRICATIVE> or <VOICED> ' +
-              PhonemeNameTable[getPhoneme(position)] +
-              ' between VOWEL:' + PhonemeNameTable[getPhoneme(vowel)] +
-              ' and PUNCTUATION:'+PhonemeNameTable[getPhoneme(position)] +
-              ' by 1.5'
-            );
-          }
           setLength(position, (A >> 1) + A + 1);
         }
       }
@@ -1032,17 +958,6 @@
         if (!phonemeHasFlag(phoneme, FLAG_CONSONANT)) {
           // 'RX' or 'LX'?
           if (((phoneme === 18) || (phoneme === 19)) && phonemeHasFlag(getPhoneme(++position$1), FLAG_CONSONANT)) {
-            // followed by consonant?
-            {
-              console.log(
-                loopIndex +
-                ' RULE: <VOWEL ' +
-                PhonemeNameTable[getPhoneme(loopIndex)] +
-                '>' + PhonemeNameTable[phoneme] +
-                ' <CONSONANT: ' + PhonemeNameTable[getPhoneme(position$1)] +
-                '> - decrease length of vowel by 1'
-              );
-            }
             // decrease length of vowel by 1 frame
             setLength(loopIndex, getLength(loopIndex) - 1);
           }
@@ -1057,22 +972,10 @@
 
           // unvoiced plosive
           if(matchesBitmask(flags, FLAG_UNVOICED_STOPCONS)) {
-            // RULE: <VOWEL> <UNVOICED PLOSIVE>
-            // <VOWEL> <P*, T*, K*, KX>
-            {
-              console.log((loopIndex + " <VOWEL> <UNVOICED PLOSIVE> - decrease vowel by 1/8th"));
-            }
             var A$1 = getLength(loopIndex);
             setLength(loopIndex, A$1 - (A$1 >> 3));
           }
           continue;
-        }
-
-        // RULE: <VOWEL> <VOWEL or VOICED CONSONANT>
-        // <VOWEL> <IY, IH, EH, AE, AA, AH, AO, UH, AX, IX, ER, UX, OH, RX, LX, WX, YX, WH, R*, L*, W*,
-        //          Y*, M*, N*, NX, Q*, Z*, ZH, V*, DH, J*, EY, AY, OY, AW, OW, UW, B*, D*, G*, GX>
-        {
-          console.log((loopIndex + " RULE: <VOWEL> <VOWEL or VOICED CONSONANT> - increase vowel by 1/4 + 1"));
         }
         // increase length
         var A$2 = getLength(loopIndex);
@@ -1093,10 +996,6 @@
         phoneme = getPhoneme(++position$1);
         // is next phoneme a stop consonant?
         if (phoneme !== END && phonemeHasFlag(phoneme, FLAG_STOPCONS)) {
-          // B*, D*, G*, GX, P*, T*, K*, KX
-          {
-            console.log((position$1 + " RULE: <NASAL> <STOP CONSONANT> - set nasal = 5, consonant = 6"));
-          }
           setLength(position$1, 6); // set stop consonant length to 6
           setLength(position$1 - 1, 5); // set nasal length to 5
         }
@@ -1116,12 +1015,6 @@
         while ((phoneme = getPhoneme(++position$1)) === 0) { /* move past silence */ }
         // if another stop consonant, process.
         if (phoneme !== END && phonemeHasFlag(phoneme, FLAG_STOPCONS)) {
-          // RULE: <STOP CONSONANT> {optional silence} <STOP CONSONANT>
-          {
-            console.log(
-              (position$1 + " RULE: <STOP CONSONANT> {optional silence} <STOP CONSONANT> - shorten both to 1/2 + 1")
-            );
-          }
           setLength(position$1, (getLength(position$1) >> 1) + 1);
           setLength(loopIndex, (getLength(loopIndex) >> 1) + 1);
         }
@@ -1135,13 +1028,6 @@
       if ((position$1>0)
         && phonemeHasFlag(phoneme, FLAG_LIQUIC)
         && phonemeHasFlag(getPhoneme(position$1-1), FLAG_STOPCONS)) {
-        // R*, L*, W*, Y*
-        // RULE: <STOP CONSONANT> <LIQUID>
-        //       Decrease <LIQUID> by 2
-        // prior phoneme is a stop consonant
-        {
-          console.log((position$1 + " RULE: <STOP CONSONANT> <LIQUID> - decrease by 2"));
-        }
         // decrease the phoneme length by 2 frames (20 ms)
         setLength(position$1, getLength(position$1) - 2);
       }
@@ -1312,9 +1198,6 @@
       return (pos === phonemeindex.length - 1) ? END : phonemeindex[pos]
     };
     var setPhoneme = function (pos, value) {
-      {
-        console.log((pos + " CHANGE: " + (PhonemeNameTable[phonemeindex[pos]]) + " -> " + (PhonemeNameTable[value])));
-      }
       phonemeindex[pos]  = value;
     };
 
@@ -1327,9 +1210,6 @@
      * @return {undefined}
      */
     var insertPhoneme = function (pos, value, stressValue, length) {
-      {
-        console.log((pos + " INSERT: " + (PhonemeNameTable[value])));
-      }
       for(var i = phonemeindex.length - 1; i >= pos; i--) {
         phonemeindex[i+1]  = phonemeindex[i];
         phonemeLength[i+1] = getLength(i);
@@ -1341,26 +1221,10 @@
     };
     var getStress = function (pos) { return stress[pos] | 0; };
     var setStress = function (pos, stressValue) {
-      {
-        console.log(
-          (pos + " \"" + (PhonemeNameTable[phonemeindex[pos]]) + "\" SET STRESS: " + (stress[pos]) + " -> " + stressValue)
-        );
-      }
       stress[pos] = stressValue;
     };
     var getLength = function (pos) { return phonemeLength[pos] | 0; };
     var setLength = function (pos, length) {
-      {
-        console.log(
-          (pos + " \"" + (PhonemeNameTable[phonemeindex[pos]]) + "\" SET LENGTH: " + (phonemeLength[pos]) + " -> " + length)
-        );
-        if ((length & 128) !== 0) {
-          throw new Error('Got the flag 0x80, see CopyStress() and SetPhonemeLength() comments!');
-        }
-        if (pos<0 || pos>phonemeindex.length) {
-          throw new Error('Out of bounds: ' + pos)
-        }
-      }
       phonemeLength[pos] = length;
     };
 
@@ -1377,19 +1241,10 @@
         phonemeindex[pos++] = value;
       },
       function (value) {
-        {
-          if ((value & 128) !== 0) {
-            throw new Error('Got the flag 0x80, see CopyStress() and SetPhonemeLength() comments!');
-          }
-        }
         stress[pos - 1] = value; /* Set stress for prior phoneme */
       }
     );
     phonemeindex[pos] = END;
-
-    {
-      PrintPhonemes(phonemeindex, phonemeLength, stress);
-    }
     Parser2(insertPhoneme, setPhoneme, getPhoneme, getStress);
     CopyStress(getPhoneme, getStress, setStress);
     SetPhonemeLength(getPhoneme, getStress, setLength);
@@ -1406,54 +1261,7 @@
 
     InsertBreath(getPhoneme, setPhoneme, insertPhoneme, getStress, getLength, setLength);
 
-    {
-      PrintPhonemes(phonemeindex, phonemeLength, stress);
-    }
-
     return phonemeindex.map(function (v, i) { return [v, phonemeLength[i] | 0, stress[i] | 0]; });
-  }
-
-  /**
-   * Debug printing.
-   *
-   * @param {Array} phonemeindex
-   * @param {Array} phonemeLength
-   * @param {Array} stress
-   *
-   * @return undefined
-   */
-  function PrintPhonemes (phonemeindex, phonemeLength, stress) {
-    function pad(num) {
-      var s = '000' + num;
-      return s.substr(s.length - 3);
-    }
-
-    console.log('==================================');
-    console.log('Internal Phoneme presentation:');
-    console.log(' pos  idx  phoneme  length  stress');
-    console.log('----------------------------------');
-    var loop = function ( i ) {
-      var name = function (phoneme) {
-        if (phonemeindex[i] < 81) {
-          return PhonemeNameTable[phonemeindex[i]];
-        }
-        if (phoneme === BREAK) {
-          return '  ';
-        }
-        return '??'
-      };
-      console.log(
-        ' %s  %s  %s       %s     %s',
-        pad(i),
-        pad(phonemeindex[i]),
-        name(phonemeindex[i]),
-        pad(phonemeLength[i]),
-        pad(stress[i])
-      );
-    };
-
-    for (var i=0;i<phonemeindex.length;i++) loop( i );
-    console.log('==================================');
   }
 
   // Values substituted for zero bits in unvoiced consonant samples.
@@ -2259,9 +2067,7 @@
       ];
       bufferpos += timetable[oldTimeTableIndex][index];
       if (((bufferpos / 50) | 0) > buffer.length) {
-        {
-          throw new Error(("Buffer overflow, want " + (((bufferpos / 50) | 0)) + " but buffersize is only " + (buffer.length) + "!"));
-        }
+        throw new Error(("Buffer overflow: wanted to write to position " + (((bufferpos / 50) | 0)) + " but the buffer is only " + (buffer.length) + " samples long!"));
       }
       oldTimeTableIndex = index;
       // write a little bit in advance
@@ -2392,10 +2198,6 @@
         amplitude[2][i$1] = amplitudeRescale[amplitude[2][i$1]];
       }
 
-      {
-        PrintOutput(pitches, frequency, amplitude, sampledConsonantFlag);
-      }
-
       ProcessFrames(t, speed, frequency, pitches, amplitude, sampledConsonantFlag);
     }
 
@@ -2465,11 +2267,10 @@
 
       // Removed sine table stored a pre calculated sine wave but in modern CPU, we can calculate inline.
       var sinus = function (x) {
-        return Math.sin(2*Math.PI*(x/256)) * 127 | 0;
-        // return ((Math.sin(
-        //   (2*Math.PI)*
-        //   (x/255)
-        // )*128 | 0)/16|0)*16;
+        return ((Math.sin(
+          (2*Math.PI)*
+          (x/255)
+        )*128 | 0)/16|0)*16;
       };
 
       var speedcounter = speed;
@@ -2509,7 +2310,7 @@
             for (var k=0; k<5; k++) {
               var /* signed char */ sp1 = sinus(0xff & (p1>>8));
               var /* signed char */ sp2 = sinus(0xff & (p2>>8));
-              var /* signed char */ rp3 = ((0xff & (p3>>8))<129) ? -0x70 : 0x70;
+              var /* signed char */ rp3 = ((0xff & (p3>>8))<129) ? -112 : 0x70;
               var /* signed int */ sin1 = sp1 * (/* (unsigned char) */ amplitude[0][pos] & 0x0F);
               var /* signed int */ sin2 = sp2 * (/* (unsigned char) */ amplitude[1][pos] & 0x0F);
               var /* signed int */ rect = rp3 * (/* (unsigned char) */ amplitude[2][pos] & 0x0F);
@@ -2569,32 +2370,6 @@
         phase3 = 0;
       }
     }
-  }
-
-  function PrintOutput(pitches, frequency, amplitude, sampledConsonantFlag) {
-    function pad(num) {
-      var s = '00000' + num;
-      return s.substr(s.length - 5);
-    }
-    console.log('===========================================');
-    console.log('Final data for speech output:');
-    console.log(' flags ampl1 freq1 ampl2 freq2 ampl3 freq3 pitch');
-    console.log('------------------------------------------------');
-    for (var i=0;i<sampledConsonantFlag.length;i++) {
-      console.log(
-        ' %s %s %s %s %s %s %s %s',
-        pad(sampledConsonantFlag[i]),
-        pad(amplitude[0][i]),
-        pad(frequency[0][i]),
-        pad(amplitude[1][i]),
-        pad(frequency[1][i]),
-        pad(amplitude[2][i]),
-        pad(frequency[2][i]),
-        pad(pitches[i])
-      );
-      i++;
-    }
-    console.log('===========================================');
   }
 
   /**
@@ -2807,4 +2582,4 @@
 
   return GuessNum;
 
-})));
+}));

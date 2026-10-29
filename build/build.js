@@ -2,8 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const rollup = require('rollup');
-const uglify = require('uglify-js');
-const uglifyEs = require('uglify-es');
+const terser = require('terser');
 
 if (!fs.existsSync('dist')) {
   fs.mkdirSync('dist')
@@ -45,13 +44,13 @@ function buildEntry (config) {
     const {output} = await bundle.generate(outConfig)
     const code = output[0].code
     if (isProd) {
-      let result = (/esm\.min$/.test(outConfig.file) ? uglify : uglifyEs).minify(code, {
+      // terser is the maintained fork of uglify-es and handles both
+      // ES5 and ES module code, so one code path serves all bundles.
+      const result = await terser.minify(code, {
         mangle: {
-          // keep_classnames: true,
+          toplevel: true,
         },
-        warnings: true,
-        toplevel: true,
-        output: {
+        format: {
           ascii_only: true
         },
         compress: {
@@ -68,7 +67,6 @@ function buildEntry (config) {
       });
       let minimized = (outConfig.banner ? outConfig.banner + '\n' : '') + result.code;
       if (result.error) console.error(result.error.message);
-      if (result.warnings) console.warn(result.warnings);
 
       await Promise.all([
         write(outConfig.file, minimized, true),

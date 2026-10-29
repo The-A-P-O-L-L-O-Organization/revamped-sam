@@ -10,11 +10,15 @@ const banner =
   ' *\n' +
   ' * A Javascript port of "SAM Software Automatic Mouth".\n' +
   ' *\n' +
-  ' * (c) 2017-' + new Date().getFullYear() + ' Christian Schiffler\n' +
+  ' * Part of the revamped-sam fork:\n' +
+  ' * https://github.com/The-A-P-O-L-L-O-Organization/revamped-sam\n' +
+  ' *\n' +
+  ' * Library port: (c) 2017-' + new Date().getFullYear() + ' Christian Schiffler\n' +
+  ' * Original program: SAM Software Automatic Mouth\n' +
+  ' * (c) 1982 Don\'t Ask Software (now SoftVoice, Inc.)\n' +
   ' *\n' +
   ' * @link(https://github.com/discordier/sam)\n' +
   ' *\n' +
-  ' * @author 2017 Christian Schiffler <c.schiffler@cyberspectrum.de>\n' +
   ' */';
 
 const resolve = p => {
@@ -92,6 +96,7 @@ function genConfig (opts) {
     external: opts.external,
     plugins: [
       replace({
+        preventAssignment: true,
         __VERSION__: version
       }),
       flow(),
@@ -101,8 +106,13 @@ function genConfig (opts) {
 
   if (opts.env) {
     config.plugins.push(replace({
+      preventAssignment: true,
       'process.env.NODE_ENV': JSON.stringify(opts.env),
-      'process.env.DEBUG_SAM': JSON.stringify(opts.env === 'development'),
+      // Debug rule-tracing must never ship in the dist bundles: the demo page
+      // loads a development-env build, so DEBUG_SAM has to be false here
+      // regardless of the environment. (Enable tracing by manually replacing
+      // this constant when debugging.)
+      'process.env.DEBUG_SAM': JSON.stringify(false)
     }))
   }
 
