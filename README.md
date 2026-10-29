@@ -30,9 +30,14 @@ Improvements of the fork lineage on top of the plain library:
 
 - Two buttons: speech "Preview" and ".WAV Download";
 - Adjustable `pitch`, `speed`, `mouth` and `throat` sliders;
-- Downloadable `.WAV` files (hand-made RIFF/WAVE header, no dependencies);
+- Downloadable `.WAV` files (hand-made RIFF/WAVE header, no dependencies),
+  built by an environment-agnostic wav writer with optional 16-bit PCM
+  containers (`bits`) and a Node-friendly `toWav()` helper;
+- Per-call option overrides for pitch/speed/mouth/throat and friends;
 - A self-contained demo page (`index.html`), later reworked into the
-  React demo app in [`web/`](web) that CI deploys to GitHub Pages.
+  React demo app in [`web/`](web) that CI deploys to GitHub Pages. The
+  app previews the recited phonemes and the waveform live, and the voice
+  settings are shareable via the URL.
 
 ## Usage
 
@@ -63,13 +68,26 @@ Available instance methods:
 | Method    | Description                                                    |
 |-----------|----------------------------------------------------------------|
 | `speak()` | Render text and play it via the Web Audio API. Returns a `Promise`. |
-| `download()` | Render text and trigger a `.wav` download. Browser only; use `buf8()` in Node. |
+| `download()` | Render and trigger a `.wav` download. Browser only; an optional third argument sets the file name (default `sam.wav`). Use `toWav()` in Node. |
 | `buf8()`  | Render and return the raw 8-bit wave buffer (`Uint8Array`).     |
+| `buf16()` | Render and return signed 16-bit samples (`Int16Array`).         |
 | `buf32()` | Render and return the raw 32-bit wave buffer (`Float32Array`).  |
+| `toWav()` | Render and return a complete `.wav` file image (`Uint8Array`). Works in browsers and Node. |
 
-All methods take an optional second parameter `phonetic` which should be set
-to `true` if the input is already SAM phoneme data instead of English text.
-Plain English text is converted through the bundled **Reciter** module
+Every render method accepts an optional per-call options object instead of
+the legacy plain `phonetic` boolean, whose entries override the constructor
+options for that call; the boolean shorthand for phonetic input keeps working:
+
+```js
+const sam = new SamJs({ pitch: 64 });
+sam.speak('hello.', { pitch: 128 });        // higher pitch for this call only
+sam.buf8('/HEHLOW', true);                  // boolean phonetic shorthand
+new SamJs({}).toWav('`') === false;         // returned instead of empty data
+```
+
+All methods take such a per-call parameter; the special `phonetic: true` entry
+(or a plain boolean) treats the input as SAM phoneme data instead of English
+text. Plain English text is converted through the bundled **Reciter** module
 (`SamJs.convert`).
 
 Options accepted by the constructor:
@@ -83,6 +101,7 @@ Options accepted by the constructor:
 | `speed`    | `72`    | Speaking speed (1-255).             |
 | `mouth`    | `128`   | Mouth formant (0-255).              |
 | `throat`   | `128`   | Throat formant (0-255).             |
+| `bits`     | `8`     | Container precision of `.wav` output for `download()`/`toWav()`: `8` (the authentic format) or `16` — a lossless container upgrade, every 8-bit sample is represented exactly. |
 
 ## Development
 

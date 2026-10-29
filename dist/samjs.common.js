@@ -47,6 +47,92 @@ function Uint16ToUint8Array(uint16) {
 }
 
 /**
+ * Build a complete RIFF/WAVE file image from raw 8-bit PCM samples,
+ * the format the SAM renderer produces (unsigned, 128 = silence).
+ *
+ * This helper is environment agnostic: it produces plain bytes, so it
+ * works in the browser (hand it to a Blob) and in Node (write it to a
+ * file) alike; used for tests as well.
+ *
+ * @param {Uint8Array} audiobuffer Raw unsigned 8-bit PCM samples.
+ * @param {Number}     [bits]      Bits per samples of the resulting container,
+ *                                 either 8 (the authentic format, default)
+ *                                 or 16 (a lossless container upgrade: every
+ *                                 8-bit sample is represented exactly, no
+ *                                 further quantization is applied).
+ * @param {Number}     [sampleRate] Sample rate of the source data. Default 22050.
+ *
+ * @return {Uint8Array} The complete .wav file image.
+ */
+function BuildWav(audiobuffer, bits, sampleRate) {
+    if ( bits === void 0 ) bits = 8;
+    if ( sampleRate === void 0 ) sampleRate = 22050;
+
+    if (bits !== 8 && bits !== 16) {
+        throw new Error(("BuildWav(): \"bits\" must be 8 or 16, got " + bits + "."));
+    }
+    var channels = 1;
+    var blockAlign = channels * (bits / 8);
+    var dataBytes = bits === 8 ? audiobuffer.length : audiobuffer.length * 2;
+    // Calculate buffer size.
+    var realbuffer = new Uint8Array(4 + // "RIFF"
+        4 + // uint32 filesize
+        4 + // "WAVE"
+        4 + // "fmt "
+        4 + // uint32 fmt length
+        2 + // uint16 fmt
+        2 + // uint16 channels
+        4 + // uint32 sample rate
+        4 + // uint32 bytes per second
+        2 + // uint16 block align
+        2 + // uint16 bits per sample
+        4 + // "data"
+        4 + // uint32 chunk length
+        dataBytes);
+    var pos = 0;
+    var write = function (bytes) {
+        realbuffer.set(bytes, pos);
+        pos += bytes.length;
+    };
+    var writeText = function (value) { return write(text2Uint8Array(value)); };
+    //RIFF header
+    writeText('RIFF'); // chunkID
+    // ChunkSize: whole file size minus the 8 bytes of the "RIFF" header itself:
+    // 4 ("WAVE") + 8 (fmt chunk header) + 16 (fmt chunk) + 8 (data chunk header)
+    // + dataBytes = dataBytes + 36
+    write(Uint32ToUint8Array(dataBytes + 36)); // ChunkSize
+    writeText('WAVE'); // riffType
+    //format chunk
+    writeText('fmt ');
+    write(Uint32ToUint8Array(16)); // ChunkSize
+    write(Uint16ToUint8Array(1)); // wFormatTag - 1 = PCM
+    write(Uint16ToUint8Array(channels)); // channels
+    write(Uint32ToUint8Array(sampleRate)); // samplerate
+    write(Uint32ToUint8Array(sampleRate * blockAlign)); // bytes/second
+    write(Uint16ToUint8Array(blockAlign)); // blockalign
+    write(Uint16ToUint8Array(bits)); // bits per sample
+    //data chunk
+    writeText('data');
+    write(Uint32ToUint8Array(dataBytes)); // buffer length
+    if (bits === 8) {
+        // Unsigned 8-bit PCM: the source data already comes in exactly this
+        // format, so it can be written as-is.
+        write(audiobuffer);
+    }
+    else {
+        // Signed 16-bit little-endian PCM: upscale every byte sample into its
+        // exact 16-bit representation. byte - 128 is in -128..127, shifting it
+        // left by 8 yields the same signal without any quantization loss.
+        for (var i = 0; i < audiobuffer.length; i++) {
+            var value = (audiobuffer[i] - 128) * 256;
+            realbuffer[pos++] = value & 0xFF;
+            realbuffer[pos++] = (value >> 8) & 0xFF;
+        }
+    }
+    return realbuffer;
+}
+
+/**
  *
  * @param {AudioContext} context
  * @param audiobuffer
@@ -107,53 +193,21 @@ function UInt8ArrayToFloat32Array(buffer) {
     return audio;
 }
 /**
+ * Create a downloadable .wav file image from the buffer and trigger the
+ * download in the browser.
  *
- * @param {Uint8Array} audiobuffer
+ * @param {Uint8Array} audiobuffer Raw unsigned 8-bit PCM samples.
+ * @param {String}     [filename]  Download file name, defaults to 'sam.wav'.
+ * @param {Number}     [bits]      Container precision passed through to the
+ *                                 wav builder, 8 (default) or 16.
  *
  * @return void
  */
-function RenderBuffer(audiobuffer) {
-    var filename = 'sam.wav';
-    // Calculate buffer size.
-    var realbuffer = new Uint8Array(4 + // "RIFF"
-        4 + // uint32 filesize
-        4 + // "WAVE"
-        4 + // "fmt "
-        4 + // uint32 fmt length
-        2 + // uint16 fmt
-        2 + // uint16 channels
-        4 + // uint32 sample rate
-        4 + // uint32 bytes per second
-        2 + // uint16 block align
-        2 + // uint16 bits per sample
-        4 + // "data"
-        4 + // uint32 chunk length
-        audiobuffer.length);
-    var pos = 0;
-    var write = function (buffer) {
-        realbuffer.set(buffer, pos);
-        pos += buffer.length;
-    };
-    //RIFF header
-    write(text2Uint8Array('RIFF')); // chunkID
-    // ChunkSize: whole file size minus the 8 bytes of the "RIFF" header itself:
-    // 4 ("WAVE") + 8 (fmt chunk header) + 16 (fmt chunk) + 8 (data chunk header)
-    // + audiobuffer.length = audiobuffer.length + 36
-    write(Uint32ToUint8Array(audiobuffer.length + 36)); // ChunkSize
-    write(text2Uint8Array('WAVE')); // riffType
-    //format chunk
-    write(text2Uint8Array('fmt '));
-    write(Uint32ToUint8Array(16)); // ChunkSize
-    write(Uint16ToUint8Array(1)); // wFormatTag - 1 = PCM
-    write(Uint16ToUint8Array(1)); // channels
-    write(Uint32ToUint8Array(22050)); // samplerate
-    write(Uint32ToUint8Array(22050)); // bytes/second
-    write(Uint16ToUint8Array(1)); // blockalign
-    write(Uint16ToUint8Array(8)); // bits per sample
-    //data chunk
-    write(text2Uint8Array('data'));
-    write(Uint32ToUint8Array(audiobuffer.length)); // buffer length
-    write(audiobuffer);
+function RenderBuffer(audiobuffer, filename, bits) {
+    if ( filename === void 0 ) filename = 'sam.wav';
+    if ( bits === void 0 ) bits = 8;
+
+    var realbuffer = BuildWav(audiobuffer, bits);
     var blob = new Blob([realbuffer], { type: 'audio/vnd.wave' });
     var url = (window.URL || window.webkitURL);
     var fileURL = url.createObjectURL(blob);
@@ -2340,6 +2394,36 @@ function SamBuffer(input, options) {
     return UInt8ArrayToFloat32Array(buffer);
 }
 /**
+ * Process the input and return signed 16-bit PCM samples.
+ *
+ * This is a lossless container upgrade of the 8-bit renderer output:
+ * every byte sample is represented exactly (worked out as a signed shift),
+ * no quantization is applied on top of what the synthesis itself produces.
+ *
+ * @param {String} input
+ *
+ * @param {object}  [options]
+ * @param {Boolean} [options.singmode] Default false.
+ * @param {Boolean} [options.debug]    Default false.
+ * @param {Number}  [options.pitch]    Default 64.
+ * @param {Number}  [options.speed]    Default 72.
+ * @param {Number}  [options.mouth]    Default 128.
+ * @param {Number}  [options.throat]   Default 128.
+ *
+ * @return {Int16Array|Boolean}
+ */
+function SamBuffer16(input, options) {
+    var buffer = SamProcess(input, options);
+    if (false === buffer) {
+        return false;
+    }
+    var samples = new Int16Array(buffer.length);
+    for (var i = 0; i < buffer.length; i++) {
+        samples[i] = (buffer[i] - 128) * 256;
+    }
+    return samples;
+}
+/**
  * Process the input and return the audiobuffer.
  *
  * @param {String} input
@@ -3201,7 +3285,29 @@ function TextToPhonemes(input) {
 }
 
 /**
- * SAM - The Software Automatic Mouth.
+ * SamOptions for one call: merge the constructor options with the
+ * per-call overrides and detect the phonetic flag.
+ *
+ * @param {object}   constructor options.
+ * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
+ *
+ * @return {object} The merged options (with `phonetic`) for this call.
+ */
+function resolveOptions(base, callOptions) {
+    if (typeof callOptions === 'boolean') {
+        return Object.assign({}, base, { phonetic: callOptions });
+    }
+    return callOptions ? Object.assign(Object.assign({}, base), callOptions) : base;
+}
+/**
+ * Phonetic handling for the static helpers: recite plain English text,
+ * uppercase phonetic input.
+ */
+function staticEnsurePhonetic(input, merged) {
+    return merged.phonetic ? input.toUpperCase() : TextToPhonemes(input);
+}
+/**
+ * SamJs - The Software Automatic Mouth.
  *
  * Renders text (plain English or SAM phonemes) to audible speech.
  *
@@ -3214,8 +3320,8 @@ function TextToPhonemes(input) {
  */
 function samJsFactory(options) {
     var opts = options || {};
-    var ensurePhonetic = function (text, phonetic) {
-        if (!(phonetic || opts.phonetic)) {
+    var ensurePhonetic = function (text, merged) {
+        if (!merged.phonetic) {
             return TextToPhonemes(text);
         }
         return text.toUpperCase();
@@ -3224,58 +3330,98 @@ function samJsFactory(options) {
         /**
          * Render the passed text as an 8bit wave buffer array.
          *
-         * @param {string}  text       The text to render or phoneme string.
-         * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
          *
          * @return {Uint8Array|Boolean} The wave buffer or false.
          */
-        buf8: function buf8(text, phonetic) {
-            return SamProcess(ensurePhonetic(text, phonetic), opts);
+        buf8: function buf8(text, callOptions) {
+            var merged = resolveOptions(opts, callOptions);
+            return SamProcess(ensurePhonetic(text, merged), merged);
+        },
+        /**
+         * Render the passed text as signed 16-bit PCM samples.
+         *
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
+         *
+         * @return {Int16Array|Boolean} The samples or false.
+         */
+        buf16: function buf16(text, callOptions) {
+            var merged = resolveOptions(opts, callOptions);
+            return SamBuffer16(ensurePhonetic(text, merged), merged);
         },
         /**
          * Render the passed text as a 32bit wave buffer array.
          *
-         * @param {string}  text       The text to render or phoneme string.
-         * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
          *
          * @return {Float32Array|Boolean} The wave buffer or false.
          */
-        buf32: function buf32(text, phonetic) {
-            return SamBuffer(ensurePhonetic(text, phonetic), opts);
+        buf32: function buf32(text, callOptions) {
+            var merged = resolveOptions(opts, callOptions);
+            return SamBuffer(ensurePhonetic(text, merged), merged);
         },
         /**
          * Render the passed text as wave buffer and play it over the speakers.
          *
-         * @param {string}  text       The text to render or phoneme string.
-         * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
          *
          * @return {Promise<boolean>} Resolves once playback has finished.
          */
-        speak: function speak(text, phonetic) {
-            var buffer = SamBuffer(ensurePhonetic(text, phonetic), opts);
+        speak: function speak(text, callOptions) {
+            var merged = resolveOptions(opts, callOptions);
+            var buffer = SamBuffer(ensurePhonetic(text, merged), merged);
             if (buffer === false) {
                 return Promise.reject(new Error('SamJs.speak(): could not parse the passed text.'));
             }
             return PlayBuffer(buffer);
         },
         /**
+         * Render the passed text as a .wav file image. Environment agnostic:
+         * works in browsers and in Node alike.
+         *
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
+         *
+         * @return {Uint8Array|Boolean} The complete .wav file image, or false.
+         */
+        toWav: function toWav(text, callOptions) {
+            var merged = resolveOptions(opts, callOptions);
+            var buffer = SamProcess(ensurePhonetic(text, merged), merged);
+            if (buffer === false) {
+                return false;
+            }
+            return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+        },
+        /**
          * Render the passed text as wave buffer and download it via URL API
          * (browser only).
          *
-         * @param {string}  text       The text to render or phoneme string.
-         * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+         * @param {string}  [text]     The text to render or phoneme string.
+         * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+         *                                     option overrides.
+         * @param {string}  [filename] Download file name, defaults to 'sam.wav'.
          *
          * @return void
          */
-        download: function download(text, phonetic) {
+        download: function download(text, callOptions, filename) {
             if (typeof window === 'undefined') {
-                throw new Error('SamJs.download() requires a browser environment (window/document/Blob). Use buf8() to obtain the raw wave buffer instead.');
+                throw new Error('SamJs.download() requires a browser environment (window/document/Blob). Use toWav() in Node instead.');
             }
-            var buffer = SamProcess(ensurePhonetic(text, phonetic), opts);
+            var merged = resolveOptions(opts, callOptions);
+            var buffer = SamProcess(ensurePhonetic(text, merged), merged);
             if (buffer === false) {
                 throw new Error('SamJs.download(): could not parse the passed text.');
             }
-            RenderBuffer(buffer);
+            RenderBuffer(buffer, filename || 'sam.wav', merged.bits === 16 ? 16 : 8);
         },
     };
 }
@@ -3286,9 +3432,29 @@ Object.assign(SamJs, {
     /** Convert English text to SAM phonemes via the Reciter module. */
     convert: function (text) { return TextToPhonemes(text); },
     /** Raw 8-bit renderer, see SamProcess(). */
-    buf8: function (input, options) { return SamProcess(input, options); },
+    buf8: function (input, options) {
+        var merged = options || {};
+        return SamProcess(staticEnsurePhonetic(input, merged), merged);
+    },
+    /** Signed 16-bit samples, see SamBuffer16(). */
+    buf16: function (input, options) {
+        var merged = options || {};
+        return SamBuffer16(staticEnsurePhonetic(input, merged), merged);
+    },
     /** Raw 32-bit renderer, see SamBuffer(). */
-    buf32: function (input, options) { return SamBuffer(input, options); },
+    buf32: function (input, options) {
+        var merged = options || {};
+        return SamBuffer(staticEnsurePhonetic(input, merged), merged);
+    },
+    /** Render and return a complete .wav file image (browser and Node). */
+    toWav: function (input, options) {
+        var merged = options || {};
+        var buffer = SamProcess(staticEnsurePhonetic(input, merged), merged);
+        if (buffer === false) {
+            return false;
+        }
+        return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+    },
 });
 
 module.exports = SamJs;

@@ -35,7 +35,7 @@
     "build:types": "node build/types.js",
     "lint": "oxlint",
     "test": "pnpm t-1 && pnpm t-2 && pnpm t-3 && pnpm t-4 && pnpm t-5 && pnpm t-6 && pnpm t-7 && pnpm t-8",
-    "t-1": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/minimum-tests.spec.js test/index.spec.js test/types/*.spec.js",
+    "t-1": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/minimum-tests.spec.js test/index.spec.js test/wav.spec.js test/types/*.spec.js",
     "t-2": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-1.spec.js",
     "t-3": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-2.spec.js",
     "t-4": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-3.spec.js",

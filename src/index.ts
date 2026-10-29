@@ -32,6 +32,12 @@ export interface SamOptions {
    * Throat formant (0-255). Default: 128.
    */
   throat?: number;
+  /**
+   * Container precision of .wav downloads and the toWav() helper:
+   * 8-bit PCM (the authentic format, default) or 16-bit PCM (a lossless
+   * container upgrade - every 8-bit sample is represented exactly).
+   */
+  bits?: 8 | 16;
 }
 
 /** The 8-bit wave buffer the renderer produces, or false if parsing failed. */
@@ -40,12 +46,51 @@ export type SamProcessResult = Uint8Array | false;
 /** The 32-bit wave buffer the renderer produces, or false if parsing failed. */
 export type SamBufferResult = Float32Array | false;
 
+/** The signed 16-bit samples the renderer produces, or false if parsing failed. */
+export type SamBuffer16Result = Int16Array | false;
+
+/**
+ * Per-call arguments for the instance methods: pass `true`/`false` as a
+ * shorthand for the phonetic flag, or an options object whose entries
+ * override the constructor options for this call only.
+ */
+export type SamCallOptions = SamOptions;
+export type SamInputOptions = boolean | SamCallOptions;
+
 import { PlayBuffer, RenderBuffer } from './util/player.js';
-import { SamProcess, SamBuffer } from './sam/sam.js';
+import { SamProcess, SamBuffer, SamBuffer16 } from './sam/sam.js';
+import BuildWav from './util/wav.js';
 import TextToPhonemes from './reciter/reciter.js';
 
 /**
- * SAM - The Software Automatic Mouth.
+ * SamOptions for one call: merge the constructor options with the
+ * per-call overrides and detect the phonetic flag.
+ *
+ * @param {object}   constructor options.
+ * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
+ *
+ * @return {object} The merged options (with `phonetic`) for this call.
+ */
+function resolveOptions (
+  base: SamOptions,
+  callOptions?: SamInputOptions
+): SamOptions {
+  if (typeof callOptions === 'boolean') {
+    return Object.assign({}, base, {phonetic: callOptions});
+  }
+  return callOptions ? Object.assign(Object.assign({}, base), callOptions) : base;
+}
+
+/**
+ * Phonetic handling for the static helpers: recite plain English text,
+ * uppercase phonetic input.
+ */
+function staticEnsurePhonetic (input: string, merged: SamOptions): string {
+  return merged.phonetic ? input.toUpperCase() : (TextToPhonemes(input) as string);
+}
+
+/**
+ * SamJs - The Software Automatic Mouth.
  *
  * Renders text (plain English or SAM phonemes) to audible speech.
  *
@@ -59,8 +104,8 @@ import TextToPhonemes from './reciter/reciter.js';
 function samJsFactory (options?: SamOptions): SamJsInstance {
   const opts = options || {};
 
-  const ensurePhonetic = (text: string, phonetic?: boolean): string => {
-    if (!(phonetic || opts.phonetic)) {
+  const ensurePhonetic = (text: string, merged: SamOptions): string => {
+    if (!merged.phonetic) {
       return TextToPhonemes(text) as string;
     }
     return text.toUpperCase();
@@ -70,37 +115,57 @@ function samJsFactory (options?: SamOptions): SamJsInstance {
     /**
      * Render the passed text as an 8bit wave buffer array.
      *
-     * @param {string}  text       The text to render or phoneme string.
-     * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
      *
      * @return {Uint8Array|Boolean} The wave buffer or false.
      */
-    buf8 (text: string, phonetic?: boolean): SamProcessResult {
-      return SamProcess(ensurePhonetic(text, phonetic), opts) as SamProcessResult;
+    buf8 (text: string, callOptions?: SamInputOptions): SamProcessResult {
+      const merged = resolveOptions(opts, callOptions);
+      return SamProcess(ensurePhonetic(text, merged), merged) as SamProcessResult;
+    },
+
+    /**
+     * Render the passed text as signed 16-bit PCM samples.
+     *
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
+     *
+     * @return {Int16Array|Boolean} The samples or false.
+     */
+    buf16 (text: string, callOptions?: SamInputOptions): SamBuffer16Result {
+      const merged = resolveOptions(opts, callOptions);
+      return SamBuffer16(ensurePhonetic(text, merged), merged) as SamBuffer16Result;
     },
 
     /**
      * Render the passed text as a 32bit wave buffer array.
      *
-     * @param {string}  text       The text to render or phoneme string.
-     * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
      *
      * @return {Float32Array|Boolean} The wave buffer or false.
      */
-    buf32 (text: string, phonetic?: boolean): SamBufferResult {
-      return SamBuffer(ensurePhonetic(text, phonetic), opts) as SamBufferResult;
+    buf32 (text: string, callOptions?: SamInputOptions): SamBufferResult {
+      const merged = resolveOptions(opts, callOptions);
+      return SamBuffer(ensurePhonetic(text, merged), merged) as SamBufferResult;
     },
 
     /**
      * Render the passed text as wave buffer and play it over the speakers.
      *
-     * @param {string}  text       The text to render or phoneme string.
-     * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
      *
      * @return {Promise<boolean>} Resolves once playback has finished.
      */
-    speak (text: string, phonetic?: boolean): Promise<boolean> {
-      const buffer = SamBuffer(ensurePhonetic(text, phonetic), opts) as SamBufferResult;
+    speak (text: string, callOptions?: SamInputOptions): Promise<boolean> {
+      const merged = resolveOptions(opts, callOptions);
+      const buffer = SamBuffer(ensurePhonetic(text, merged), merged) as SamBufferResult;
       if (buffer === false) {
         return Promise.reject(new Error('SamJs.speak(): could not parse the passed text.'));
       }
@@ -108,23 +173,45 @@ function samJsFactory (options?: SamOptions): SamJsInstance {
     },
 
     /**
+     * Render the passed text as a .wav file image. Environment agnostic:
+     * works in browsers and in Node alike.
+     *
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
+     *
+     * @return {Uint8Array|Boolean} The complete .wav file image, or false.
+     */
+    toWav (text: string, callOptions?: SamInputOptions): SamProcessResult {
+      const merged = resolveOptions(opts, callOptions);
+      const buffer = SamProcess(ensurePhonetic(text, merged), merged) as SamProcessResult;
+      if (buffer === false) {
+        return false;
+      }
+      return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+    },
+
+    /**
      * Render the passed text as wave buffer and download it via URL API
      * (browser only).
      *
-     * @param {string}  text       The text to render or phoneme string.
-     * @param {boolean} [phonetic] Flag if the input text is already phonetic data.
+     * @param {string}  [text]     The text to render or phoneme string.
+     * @param {SamInputOptions} [options] `true` for phonetic input, or per-call
+     *                                     option overrides.
+     * @param {string}  [filename] Download file name, defaults to 'sam.wav'.
      *
      * @return void
      */
-    download (text: string, phonetic?: boolean): void {
+    download (text: string, callOptions?: SamInputOptions, filename?: string): void {
       if (typeof window === 'undefined') {
-        throw new Error('SamJs.download() requires a browser environment (window/document/Blob). Use buf8() to obtain the raw wave buffer instead.');
+        throw new Error('SamJs.download() requires a browser environment (window/document/Blob). Use toWav() in Node instead.');
       }
-      const buffer = SamProcess(ensurePhonetic(text, phonetic), opts) as SamProcessResult;
+      const merged = resolveOptions(opts, callOptions);
+      const buffer = SamProcess(ensurePhonetic(text, merged), merged) as SamProcessResult;
       if (buffer === false) {
         throw new Error('SamJs.download(): could not parse the passed text.');
       }
-      RenderBuffer(buffer);
+      RenderBuffer(buffer, filename || 'sam.wav', merged.bits === 16 ? 16 : 8);
     },
   };
 }
@@ -139,8 +226,12 @@ export interface SamJsFactory {
   convert (text: string): string | false;
   /** Raw 8-bit renderer, see SamProcess(). */
   buf8 (input: string, options?: SamOptions): SamProcessResult;
+  /** Signed 16-bit samples, see SamBuffer16(). */
+  buf16 (input: string, options?: SamOptions): SamBuffer16Result;
   /** Raw 32-bit renderer, see SamBuffer(). */
   buf32 (input: string, options?: SamOptions): SamBufferResult;
+  /** Render and return a complete .wav file image (browser and Node). */
+  toWav (input: string, options?: SamOptions): SamProcessResult;
 }
 
 /**
@@ -148,13 +239,17 @@ export interface SamJsFactory {
  */
 export interface SamJsInstance {
   /** Render the text to an 8-bit wave buffer (Uint8Array), or false. */
-  buf8 (text: string, phonetic?: boolean): SamProcessResult;
+  buf8 (text: string, callOptions?: SamInputOptions): SamProcessResult;
+  /** Render the text to signed 16-bit samples (Int16Array), or false. */
+  buf16 (text: string, callOptions?: SamInputOptions): SamBuffer16Result;
   /** Render the text to a 32-bit wave buffer (Float32Array), or false. */
-  buf32 (text: string, phonetic?: boolean): SamBufferResult;
+  buf32 (text: string, callOptions?: SamInputOptions): SamBufferResult;
   /** Render and play the text over the speakers. Resolves once playback finished. */
-  speak (text: string, phonetic?: boolean): Promise<boolean>;
+  speak (text: string, callOptions?: SamInputOptions): Promise<boolean>;
+  /** Render the text to a complete .wav file image (Uint8Array), or false. */
+  toWav (text: string, callOptions?: SamInputOptions): SamProcessResult;
   /** Render and download the text as a .wav file (browser only). */
-  download (text: string, phonetic?: boolean): void;
+  download (text: string, callOptions?: SamInputOptions, filename?: string): void;
 }
 
 // Attach the static helpers for functional use without instantiation, and
@@ -167,7 +262,27 @@ Object.assign(SamJs, {
   /** Convert English text to SAM phonemes via the Reciter module. */
   convert: (text: string): string | false => TextToPhonemes(text) as string | false,
   /** Raw 8-bit renderer, see SamProcess(). */
-  buf8: (input: string, options?: SamOptions): SamProcessResult => SamProcess(input, options) as SamProcessResult,
+  buf8: (input: string, options?: SamOptions): SamProcessResult => {
+    const merged: SamOptions = options || {};
+    return SamProcess(staticEnsurePhonetic(input, merged), merged) as SamProcessResult;
+  },
+  /** Signed 16-bit samples, see SamBuffer16(). */
+  buf16: (input: string, options?: SamOptions): SamBuffer16Result => {
+    const merged: SamOptions = options || {};
+    return SamBuffer16(staticEnsurePhonetic(input, merged), merged) as SamBuffer16Result;
+  },
   /** Raw 32-bit renderer, see SamBuffer(). */
-  buf32: (input: string, options?: SamOptions): SamBufferResult => SamBuffer(input, options) as SamBufferResult,
+  buf32: (input: string, options?: SamOptions): SamBufferResult => {
+    const merged: SamOptions = options || {};
+    return SamBuffer(staticEnsurePhonetic(input, merged), merged) as SamBufferResult;
+  },
+  /** Render and return a complete .wav file image (browser and Node). */
+  toWav: (input: string, options?: SamOptions): SamProcessResult => {
+    const merged: SamOptions = options || {};
+    const buffer = SamProcess(staticEnsurePhonetic(input, merged), merged) as SamProcessResult;
+    if (buffer === false) {
+      return false;
+    }
+    return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+  },
 });
