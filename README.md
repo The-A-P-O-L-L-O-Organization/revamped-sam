@@ -35,6 +35,10 @@ Improvements of the fork lineage on top of the plain library:
 
 **Live demo:** https://the-a-p-o-l-l-o-organization.github.io/revamped-sam/
 
+The hosted demo is a React app built with [shadcn/ui](https://ui.shadcn.com)
+and Tailwind CSS, living in [`web/`](web). GitHub Pages serves its production
+bundle from the `docs/` directory; rebuild it with `pnpm build` inside `web/`.
+
 Include the prebuilt UMD library (`dist/samjs.js`) and create a `SamJs`
 instance:
 
@@ -96,6 +100,11 @@ pnpm guessnum-dev
 
 # Tests
 pnpm test    # Node (mocha): reciter/parser/renderer regression suites
+
+# Web app (shadcn/ui demo, outputs to docs/ for GitHub Pages)
+cd web
+pnpm install
+pnpm build
 ```
 
 The development toolchain is modernized for Node 26: the build uses Rollup 4 +
@@ -103,6 +112,9 @@ Terser instead of Rollup 1 + Uglify, tests run on Mocha 11, and the retired
 Karma browser harness was removed (the fixture-based regression suites cover
 the same logic under plain Node; the `karma-test` code paths in the sources
 are still what drive the golden fixtures).
+
+CI rebuilds both the library (`dist/`) and the web app (`docs/`) and fails
+if either is out of date with the sources.
 
 Note: the committed `dist/` folder ships prebuilt bundles so the demo page
 works straight from a checkout (and from GitHub Pages). Rebuild it with
