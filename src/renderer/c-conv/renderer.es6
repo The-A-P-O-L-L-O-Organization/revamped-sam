@@ -1,9 +1,3 @@
-// This is the "plain" conversion of the C renderer to javascript.
-// We use it as "reference" implementation to test against.
-// So: c-conv renderer is always correct - as it behaves as plain SAM.
-// The unit tests of our optimized renderer should match the output against
-// this implementation and only pass if they are same.
-
 import {
   mouthFormants5_29,
   throatFormants5_29,
@@ -27,9 +21,9 @@ import {
   rectangle
 } from './tables.es6';
 
-import {BREAK, END} from '../../../src/common/constants.es6'
+import {BREAK, END} from '../../common/constants.es6'
 
-import UInt8 from '../../../src/types/UInt8.es6';
+import UInt8 from '../../types/UInt8.es6';
 
 const PHONEME_PERIOD = 1;
 const PHONEME_QUESTION = 2;

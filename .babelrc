@@ -1,0 +1,17 @@
+{
+  "presets": [
+    ["@babel/preset-env", {
+        "targets": {
+          "browsers": ["last 2 versions", "safari >= 7"]
+        },
+        "modules": "commonjs"
+      }
+    ]
+  ],
+  "plugins": ["@babel/plugin-transform-runtime"],
+  "comments": false,
+  "ignore": [
+    "dist/*.js"
+  ],
+  "compact" : true
+}
