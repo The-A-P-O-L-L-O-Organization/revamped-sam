@@ -1,7 +1,6 @@
 const path = require('path');
 const buble = require('@rollup/plugin-buble');
 const replace = require('@rollup/plugin-replace');
-const flow = require('rollup-plugin-flow-no-whitespace');
 const version = process.env.VERSION || require('../package.json').version;
 
 const banner =
@@ -99,7 +98,6 @@ function genConfig (opts) {
         preventAssignment: true,
         __VERSION__: version
       }),
-      flow(),
       buble()
     ].concat(opts.plugins || [])
   };
