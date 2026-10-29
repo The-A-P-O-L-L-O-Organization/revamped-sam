@@ -87,6 +87,7 @@ export default function App() {
                   min={control.min}
                   max={control.max}
                   step={1}
+                  aria-label={`${control.label}: ${opts[control.key]} (min ${control.min}, max ${control.max})`}
                   value={[opts[control.key]]}
                   onValueChange={(value) => {
                     const next = Array.isArray(value) ? value[0] : value
@@ -103,6 +104,7 @@ export default function App() {
               <Button
                 className="flex-1"
                 size="lg"
+                aria-label="Preview the text with speech synthesis"
                 onClick={() => void speak()}
                 disabled={speaking || text.trim().length === 0}
               >
@@ -112,6 +114,7 @@ export default function App() {
                 variant="secondary"
                 size="lg"
                 className="flex-1"
+                aria-label="Download the rendered speech as a .wav file"
                 onClick={() => new SamJs(opts).download(text)}
                 disabled={text.trim().length === 0}
               >

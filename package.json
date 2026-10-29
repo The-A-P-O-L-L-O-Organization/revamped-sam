@@ -7,6 +7,18 @@
   "main": "dist/samjs.js",
   "module": "dist/samjs.esm.js",
   "types": "dist/samjs.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/samjs.d.ts",
+      "import": "./dist/samjs.esm.js",
+      "require": "./dist/samjs.common.js",
+      "default": "./dist/samjs.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "dev": "rollup -w -c build/config.js --environment TARGET:dev",
@@ -21,12 +33,17 @@
     "preprod": "node build/types.js",
     "build": "node build/build.js",
     "build:types": "node build/types.js",
-    "test": "pnpm t-1 && pnpm t-2 && pnpm t-3 && pnpm t-4 && pnpm t-5",
-    "t-1": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/minimum-tests.spec.js",
-    "t-2": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-1.spec.js",
-    "t-3": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-2.spec.js",
-    "t-4": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-3.spec.js",
-    "t-5": "mocha --check-leaks --reporter progress --require ./test/babel-register.js test/reciter/tests-4.spec.js"
+    "lint": "oxlint",
+    "test": "pnpm t-1 && pnpm t-2 && pnpm t-3 && pnpm t-4 && pnpm t-5 && pnpm t-6 && pnpm t-7 && pnpm t-8",
+    "t-1": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/minimum-tests.spec.js test/index.spec.js test/types/*.spec.js",
+    "t-2": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-1.spec.js",
+    "t-3": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-2.spec.js",
+    "t-4": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-3.spec.js",
+    "t-5": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/tests-4.spec.js",
+    "t-6": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/reciter/regression.spec.js",
+    "t-7": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/parser/*.spec.js",
+    "t-8": "mocha --check-leaks --reporter progress --require ./test/babel-register.js --timeout 30000 test/renderer/*.spec.js",
+    "cov": "c8 --reporter text --reporter lcov pnpm test"
   },
   "dependencies": {},
   "devDependencies": {
@@ -36,11 +53,13 @@
     "@babel/preset-env": "^7.0.0",
     "@babel/register": "^7.0.0",
     "@babel/runtime": "^7.0.0",
+    "c8": "^10.0.0",
     "@rollup/plugin-buble": "^1.0.0",
     "@rollup/plugin-replace": "^6.0.0",
     "chai": "^4.5.0",
     "mocha": "^11.0.0",
     "rollup": "^4.0.0",
+    "oxlint": "^1.89.0",
     "terser": "^5.0.0",
     "typescript": "^5.0.0"
   },
@@ -53,10 +72,7 @@
     "last 2 versions",
     "not ie <= 8"
   ],
-  "directories": {
-    "doc": "docs",
-    "test": "test"
-  },
+
   "repository": {
     "type": "git",
     "url": "git+https://github.com/The-A-P-O-L-L-O-Organization/revamped-sam.git"

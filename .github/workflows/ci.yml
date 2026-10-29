@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: Build and test
+    name: Build, lint and test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,11 +29,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Build
         run: pnpm build
 
-      - name: Test
-        run: pnpm test
+      - name: Test (with coverage)
+        run: pnpm cov
 
       - name: Check dist/ is not stale
         run: |
@@ -44,7 +47,7 @@ jobs:
           fi
 
   web:
-    name: Web app build (docs/)
+    name: Web app build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -64,14 +67,31 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      - name: Lint web app
+        working-directory: web
+        run: pnpm lint
+
       - name: Build web app
         working-directory: web
         run: pnpm build
 
-      - name: Check docs/ is not stale
-        run: |
-          if ! git diff --exit-code -- docs/; then
-            echo "::error::docs/ differs from 'web pnpm build' output."
-            echo "::error::Run 'pnpm build' inside web/ and commit the new docs/ files."
-            exit 1
-          fi
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: docs
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: web
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -1,5 +1,7 @@
 # SAM Software Automatic Mouth
 
+[![CI](https://github.com/The-A-P-O-L-L-O-Organization/revamped-sam/actions/workflows/ci.yml/badge.svg)](https://github.com/The-A-P-O-L-L-O-Organization/revamped-sam/actions/workflows/ci.yml)
+
 SAM is a very small Text-To-Speech (TTS) program written in C, that
 runs on most popular platforms.
 
@@ -29,15 +31,20 @@ Improvements of the fork lineage on top of the plain library:
 - Two buttons: speech "Preview" and ".WAV Download";
 - Adjustable `pitch`, `speed`, `mouth` and `throat` sliders;
 - Downloadable `.WAV` files (hand-made RIFF/WAVE header, no dependencies);
-- A simple, self-contained demo page (`index.html`).
+- A self-contained demo page (`index.html`), later reworked into the
+  React demo app in [`web/`](web) that CI deploys to GitHub Pages.
 
 ## Usage
 
 **Live demo:** https://the-a-p-o-l-l-o-organization.github.io/revamped-sam/
 
 The hosted demo is a React app built with [shadcn/ui](https://ui.shadcn.com)
-and Tailwind CSS, living in [`web/`](web). GitHub Pages serves its production
-bundle from the `docs/` directory; rebuild it with `pnpm build` inside `web/`.
+and Tailwind CSS, living in [`web/`](web). CI builds it and deploys it to
+GitHub Pages automatically on every push to `main` (via
+`actions/deploy-pages`), so `docs/` is never committed build output —
+just rebuild locally with `pnpm build` inside `web/`. Note that
+`web/vite.config.ts` aliases `samjs` to `../src/index.ts`, so the demo
+always bundles the current library *sources*, not the committed `dist/`.
 
 Include the prebuilt UMD library (`dist/samjs.js`) and create a `SamJs`
 instance:
@@ -99,9 +106,11 @@ pnpm dev:esm     # ES modules
 pnpm guessnum-dev
 
 # Tests
-pnpm test    # Node (mocha): reciter/parser/renderer regression suites
+pnpm lint    # oxlint over src/ and build/ (web/ lints itself)
+pnpm test    # regression suites: reciter/parser/renderer + golden fixtures
+pnpm cov     # same suites under c8 coverage (adds lcov/ HTML report)
 
-# Web app (shadcn/ui demo, outputs to docs/ for GitHub Pages)
+# Web app (shadcn/ui demo, auto-deployed to GitHub Pages by CI)
 cd web
 pnpm install
 pnpm build
@@ -113,14 +122,15 @@ Karma browser harness was removed (the fixture-based regression suites cover
 the same logic under plain Node; the `karma-test` code paths in the sources
 are still what drive the golden fixtures).
 
-CI rebuilds both the library (`dist/`) and the web app (`docs/`) and fails
-if either is out of date with the sources.
+CI lints, builds, and runs the regression suites under coverage, fails
+if the committed `dist/` bundles are out of date with the sources, and
+deploys the web app to GitHub Pages on every push to `main`.
 
-Note: the committed `dist/` folder ships prebuilt bundles so the demo page
-works straight from a checkout (and from GitHub Pages). Rebuild it with
-`pnpm build` after changing anything in `src/` so the demo does not drift
-from the sources — CI enforces this by rebuilding and diffing `dist/` on
-every push and pull request.
+Note: the committed `dist/` folder ships prebuilt bundles so library
+consumers work straight from a checkout. Rebuild it with `pnpm build` after
+changing anything in `src/` — CI enforces this by rebuilding and diffing
+`dist/` on every push and pull request. (The hosted demo is exempt: the
+web app bundles `src/` directly through its Vite alias.)
 
 ## TypeScript
 
@@ -133,8 +143,12 @@ faithful plain-ESM JavaScript, guarded by the golden fixtures.
 
 ## Original docs.
 
-I have bundled a copy of the original manual in this repository, see
-the [manual](docs/manual.md) file in the [docs](docs) directory.
+I have bundled copies of the original manual and its scans in this
+repository, see the [manual](docs-src/manual.md), the [hand-book
+PDF](docs-src/sam.pdf) and the [images](docs-src/img) in the
+[docs-src](docs-src) directory (plus `docs-src/downloads/GUESSNUM.BAS`,
+the C64 BASIC demo program). The plain-JS demo's build assets live in
+`docs/`, which is generated build output (see above).
 
 ## License
 

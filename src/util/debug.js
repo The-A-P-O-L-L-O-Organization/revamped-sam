@@ -21,8 +21,8 @@ const makeDebug = (debug) => {
   }
   return {
     log:  () => {},
-    warn: () => {alert(arguments.join(', '))},
-    error: () => {alert(arguments.join(', '))}
+    warn: () => {alert(Array.prototype.join.call(arguments, ', '))},
+    error: () => {alert(Array.prototype.join.call(arguments, ', '))}
   };
 };
 

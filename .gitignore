@@ -1,5 +1,16 @@
 node_modules/
 *.log
+
+# Generated outputs
 build/.ts/
 build/.dts/
+coverage/
+c8-coverage/
+
+# dist/ is committed on purpose (prebuilt bundles for the demo page).
+# docs/ is NOT committed: CI builds the web app in web/ and deploys it
+# to GitHub Pages automatically (see .github/workflows/ci.yml).
+docs/
+
+# Compiled on the fly by build/types.js (src/index.ts -> build/.ts/index.js)
 src/index.js
