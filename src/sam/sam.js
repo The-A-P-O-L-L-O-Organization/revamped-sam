@@ -97,6 +97,7 @@ export function SamBuffer16 (input, options) {
  * @param {Number}  [options.speed]    Default 72.
  * @param {Number}  [options.mouth]    Default 128.
  * @param {Number}  [options.throat]   Default 128.
+ * @param {Boolean} [options.hq]       High-precision render path. Default false.
  *
  * @return {Uint8Array|Boolean}
  */
@@ -106,5 +107,5 @@ export function SamProcess (input, options = {}) {
     return false;
   }
 
-  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode);
+  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
 }

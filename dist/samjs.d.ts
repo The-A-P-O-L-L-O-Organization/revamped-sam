@@ -38,6 +38,14 @@ export interface SamOptions {
      * container upgrade - every 8-bit sample is represented exactly).
      */
     bits?: 8 | 16;
+    /**
+     * High-precision render path: keeps the full sine amplitude instead of
+     * quantizing it to the level steps of the C64 simulation, and rounds
+     * and clamps the formant mix instead of letting it wrap around.
+     * The render timing is identical, but the voice is smoother and less
+     * crunchy than `false` (the authentic classic render). Default: false.
+     */
+    hq?: boolean;
 }
 /** The 8-bit wave buffer the renderer produces, or false if parsing failed. */
 export type SamProcessResult = Uint8Array | false;

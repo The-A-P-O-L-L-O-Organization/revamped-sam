@@ -5,9 +5,9 @@
 SAM is a very small Text-To-Speech (TTS) program written in C, that
 runs on most popular platforms.
 
-It is an adaption to Javascript of the speech software SAM (Software
-Automatic Mouth) for the Commodore C64 published in the year 1982 by
-Don't Ask Software (now SoftVoice, Inc.).
+It is an adaption to JavaScript with a typed TypeScript public API of the
+speech software SAM (Software Automatic Mouth) for the Commodore C64
+published in the year 1982 by Don't Ask Software (now SoftVoice, Inc.).
 
 It is based on the adaption to C by
 [Stefan Macke](https://github.com/s-macke/SAM)
@@ -34,6 +34,13 @@ Improvements of the fork lineage on top of the plain library:
   built by an environment-agnostic wav writer with optional 16-bit PCM
   containers (`bits`) and a Node-friendly `toWav()` helper;
 - Per-call option overrides for pitch/speed/mouth/throat and friends;
+- An optional `hq` high-precision render path for a smoother voice,
+  alongside the bit-exact authentic C64 render (both are pinned by golden
+  fixtures);
+- The Reciter knows some modern vocabulary now (AI, AGI, ASI, ANI, API,
+  CPU, GPU, USB, HTTP(S), HTML, CSS, PDF, MP3, OS, TTS, JS, JSON, OCR,
+  QR, WiFi), which the original 1982 rule set rendered as bogus English
+  fragments;
 - A self-contained demo page (`index.html`), later reworked into the
   React demo app in [`web/`](web) that CI deploys to GitHub Pages. The
   app previews the recited phonemes and the waveform live, and the voice
@@ -102,6 +109,7 @@ Options accepted by the constructor:
 | `mouth`    | `128`   | Mouth formant (0-255).              |
 | `throat`   | `128`   | Throat formant (0-255).             |
 | `bits`     | `8`     | Container precision of `.wav` output for `download()`/`toWav()`: `8` (the authentic format) or `16` — a lossless container upgrade, every 8-bit sample is represented exactly. |
+| `hq`       | `false` | High-precision render path: keeps the full sine amplitude instead of quantizing it to the level steps of the C64 simulation, and rounds and clamps the formant mix instead of letting it wrap around. Identical render timing, but a smoother and less crunchy voice than the authentic classic render. |
 
 ## Development
 
@@ -155,10 +163,20 @@ web app bundles `src/` directly through its Vite alias.)
 
 The public API surface (`src/index.ts`) is TypeScript; `pnpm build` compiles
 it and ships the public declarations as `dist/samjs.d.ts` (referenced by the
-`"types"` field in package.json), so library consumers get editor
-autocomplete and compile-time option validation (`SingMode` instead of
-`singmode` is rejected, for instance). The synthesis internals remain
-faithful plain-ESM JavaScript, guarded by the golden fixtures.
+`"types"` field in package.json). The synthesis internals remain faithful
+plain-ESM JavaScript, guarded by the golden fixtures.
+
+Library consumers get:
+
+- editor autocomplete and strict option validation: misspelled keys
+  (`SingMode` instead of `singmode`) are rejected and `bits` only accepts
+  `8 | 16` — in the constructor and in the per-call overrides
+  (`SamInputOptions = boolean | SamCallOptions`) alike;
+- the exact result shapes as exported types: `SamProcessResult`
+  (`Uint8Array | false`), `SamBuffer16Result` (`Int16Array | false`) and
+  `SamBufferResult` (`Float32Array | false`);
+- the instance and factory shapes (`SamJsInstance`, `SamJsFactory`), so both
+  `new SamJs()` and the bare `SamJs()` functional form are typed.
 
 ## Original docs.
 

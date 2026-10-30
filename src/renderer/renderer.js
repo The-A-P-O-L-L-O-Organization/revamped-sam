@@ -16,15 +16,17 @@ import CreateOutputBuffer from './output-buffer.js';
  * @param {Number} [throat]
  * @param {Number} [speed]
  * @param {Boolean} [singmode]
+ * @param {Boolean} [hq]
  *
  * @return Uint8Array
  */
-export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode) {
+export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
   pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
   mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
   throat = (throat === undefined) ? 128 : throat & 0xFF;
   speed = (speed || 72) & 0xFF;
   singmode = singmode || false;
+  hq = hq === true;
 
   // Every frame is 20ms long.
   const Output = CreateOutputBuffer(
@@ -211,10 +213,13 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
 
     // Removed sine table stored a pre calculated sine wave but in modern CPU, we can calculate inline.
     const sinus = (x) => {
-      return ((Math.sin(
-        (2*Math.PI)*
-        (x/255)
-      )*128 | 0)/16|0)*16;
+      const value = Math.sin((2*Math.PI) * (x/255)) * 128;
+      if (hq) {
+        // High-precision: keep the full float amplitude instead of
+        // quantizing it to the step levels of the original simulation.
+        return value;
+      }
+      return ((value | 0)/16|0)*16;
     }
 
     let speedcounter = speed;
@@ -261,7 +266,14 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
             let /* signed int */ mux = sin1 + sin2 + rect;
             mux /= 32;
             mux += 128; // Go from signed to unsigned amplitude
-            ary[k] = mux |0;
+            if (hq) {
+              // High-precision: round to nearest and clamp instead of the
+              // wraparound the 8-bit simulation produces when the mix
+              // exceeds the byte range.
+              ary[k] = Math.min(255, Math.max(0, Math.round(mux)));
+            } else {
+              ary[k] = mux |0;
+            }
             p1 += frequency[0][pos] * 256 / 4; // Compromise, this becomes a shift and works well
             p2 += frequency[1][pos] * 256 / 4;
             p3 += frequency[2][pos] * 256 / 4;

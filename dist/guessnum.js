@@ -2088,15 +2088,17 @@
    * @param {Number} [throat]
    * @param {Number} [speed]
    * @param {Boolean} [singmode]
+   * @param {Boolean} [hq]
    *
    * @return Uint8Array
    */
-  function Renderer(phonemes, pitch, mouth, throat, speed, singmode) {
+  function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
     pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
     mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
     throat = (throat === undefined) ? 128 : throat & 0xFF;
     speed = (speed || 72) & 0xFF;
     singmode = singmode || false;
+    hq = hq === true;
 
     // Every frame is 20ms long.
     var Output = CreateOutputBuffer(
@@ -2267,10 +2269,13 @@
 
       // Removed sine table stored a pre calculated sine wave but in modern CPU, we can calculate inline.
       var sinus = function (x) {
-        return ((Math.sin(
-          (2*Math.PI)*
-          (x/255)
-        )*128 | 0)/16|0)*16;
+        var value = Math.sin((2*Math.PI) * (x/255)) * 128;
+        if (hq) {
+          // High-precision: keep the full float amplitude instead of
+          // quantizing it to the step levels of the original simulation.
+          return value;
+        }
+        return ((value | 0)/16|0)*16;
       };
 
       var speedcounter = speed;
@@ -2317,7 +2322,14 @@
               var /* signed int */ mux = sin1 + sin2 + rect;
               mux /= 32;
               mux += 128; // Go from signed to unsigned amplitude
-              ary[k] = mux |0;
+              if (hq) {
+                // High-precision: round to nearest and clamp instead of the
+                // wraparound the 8-bit simulation produces when the mix
+                // exceeds the byte range.
+                ary[k] = Math.min(255, Math.max(0, Math.round(mux)));
+              } else {
+                ary[k] = mux |0;
+              }
               p1 += frequency[0][pos] * 256 / 4; // Compromise, this becomes a shift and works well
               p2 += frequency[1][pos] * 256 / 4;
               p3 += frequency[2][pos] * 256 / 4;
@@ -2433,6 +2445,7 @@
    * @param {Number}  [options.speed]    Default 72.
    * @param {Number}  [options.mouth]    Default 128.
    * @param {Number}  [options.throat]   Default 128.
+   * @param {Boolean} [options.hq]       High-precision render path. Default false.
    *
    * @return {Uint8Array|Boolean}
    */
@@ -2444,7 +2457,7 @@
       return false;
     }
 
-    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode);
+    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
   }
 
   var lookup_ones = ["WAHN", "TUW5", "THRIY5", "FOHR5", "FAY5V", "SIH5KS", "SEH5VUN", "EY5T", "NAY5N"];

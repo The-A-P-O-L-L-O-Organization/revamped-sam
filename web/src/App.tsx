@@ -32,7 +32,7 @@ type ControlKey = (typeof CONTROLS)[number]['key']
 type Opts = Record<ControlKey, number>
 
 /** Lower the initial settings from URLSearchParams, if present. */
-function initialSettings(): { text: string; opts: Opts; bits: 8 | 16 } {
+function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolean } {
   const params = new URLSearchParams(window.location.search)
   const clamp = (key: ControlKey, fallback: number) => {
     const raw = Number.parseInt(params.get(key) ?? '', 10)
@@ -51,6 +51,7 @@ function initialSettings(): { text: string; opts: Opts; bits: 8 | 16 } {
       throat: clamp('throat', DEFAULT_OPTS.throat),
     },
     bits: bits === 16 ? 16 : 8,
+    hq: params.get('hq') === '1',
   }
 }
 
@@ -79,6 +80,7 @@ export default function App() {
   const [text, setText] = useState(initial.text)
   const [opts, setOpts] = useState<Opts>(initial.opts)
   const [bits, setBits] = useState<8 | 16>(initial.bits)
+  const [hq, setHq] = useState(initial.hq)
   const [speaking, setSpeaking] = useState(false)
   const [copied, setCopied] = useState(false)
   const [phonemes, setPhonemes] = useState<string | false>(false)
@@ -95,12 +97,13 @@ export default function App() {
     params.set('mouth', String(opts.mouth))
     params.set('throat', String(opts.throat))
     params.set('b', String(bits))
+    params.set('hq', hq ? '1' : '0')
     window.history.replaceState(
       null,
       '',
       `${window.location.pathname}?${params}`
     )
-  }, [text, opts, bits])
+  }, [text, opts, bits, hq])
 
   // Phoneme preview, refreshed as the text settles.
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function App() {
       if (!canvas || !context) {
         return
       }
-      const samples = orFallback(() => sam.buf8(text), false)
+      const samples = orFallback(() => sam.buf8(text, { hq }), false)
       context.clearRect(0, 0, canvas.width, canvas.height)
       if (samples === false || samples.length === 0) {
         return
@@ -164,7 +167,7 @@ export default function App() {
       context.stroke()
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [text, sam])
+  }, [text, sam, hq])
 
   useEffect(() => {
     if (!copied) {
@@ -177,7 +180,7 @@ export default function App() {
   async function speak() {
     setSpeaking(true)
     try {
-      await sam.speak(text)
+      await sam.speak(text, { hq })
     } finally {
       setSpeaking(false)
     }
@@ -280,6 +283,26 @@ export default function App() {
             ))}
 
             <div className="flex items-center justify-between gap-2">
+              <Label>Voice</Label>
+              <div className="flex gap-2" role="group" aria-label="Synthesis voice">
+                {([
+                  { value: false, label: 'Classic' },
+                  { value: true, label: 'High-precision' },
+                ] as const).map((mode) => (
+                  <Button
+                    key={String(mode.value)}
+                    variant={hq === mode.value ? 'default' : 'outline'}
+                    size="sm"
+                    aria-pressed={hq === mode.value}
+                    onClick={() => setHq(mode.value)}
+                  >
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
               <Label>WAV precision</Label>
               <div className="flex gap-2" role="group" aria-label="WAV precision">
                 {([8, 16] as const).map((precision) => (
@@ -311,7 +334,7 @@ export default function App() {
                 size="lg"
                 className="flex-1"
                 aria-label="Download the rendered speech as a .wav file"
-                onClick={() => sam.download(text, { phonetic: false, bits }, fileNameOf(text))}
+                onClick={() => sam.download(text, { phonetic: false, bits, hq }, fileNameOf(text))}
                 disabled={text.trim().length === 0}
               >
                 Download .wav

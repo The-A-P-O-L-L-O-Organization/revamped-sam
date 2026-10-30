@@ -79,6 +79,34 @@ export const charFlags = {
 };
 
 export const rules =
+  // Modern vocabulary, matched per whole word before the classic rule set.
+  // Targets are composed from the letter-name rules below ("A."=EH4Y.,
+  // I=AY4, G=JIY4, J=JEY4, K=KEY4, O=OH4W, ...).
+  ' (AI.) =EH4Y.AY4. |' +
+  ' (AI) =EH4Y.AY4.|' +
+  ' (API) =EY4PIYAY4|' +
+  ' (ANI) =EY4EH4NAY4|' +
+  ' (AGI) =EY4JIYAY4|' +
+  ' (ASI) =EY4EH4SAY4|' +
+  ' (CPU) =SIYPIYYUW4|' +
+  ' (GPU) =JIYPIYYUW4|' +
+  ' (USB) =YUWEH4SBIY4|' +
+  ' (HTTP.) =EY4CHTIYTIYPIY4. |' +
+  ' (HTTP) =EY4CHTIYTIYPIY4|' +
+  ' (HTTPS) =EY4CHTIYTIYPIYEH4S|' +
+  ' (HTML) =EY4CHTIYEH4MEH4L|' +
+  ' (CSS) =SIYEH4SEH4S|' +
+  ' (PDF.) =PIYDIYEH4F. |' +
+  ' (PDF) =PIYDIYEH4F|' +
+  ' (MP3) =EH4MPIYTHRIY4|' +
+  ' (OS.) =OHEH4S. |' +
+  ' (OS) =OHEH4S|' +
+  ' (TTS) =TIYTIYEH4S|' +
+  ' (JS) =JEYEH4S|' +
+  ' (JSON) =JEYSAH4N|' +
+  ' (OCR) =OHSIYAAR4|' +
+  ' (QR) =KEYAAR4|' +
+  ' (WIFI) =WAY4FAY4|' +
   ' (A.)=EH4Y. |' +
   '(A) =AH|' +
   ' (ARE) =AAR|' +

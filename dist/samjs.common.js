@@ -2124,15 +2124,17 @@ function CreateOutputBuffer(buffersize) {
  * @param {Number} [throat]
  * @param {Number} [speed]
  * @param {Boolean} [singmode]
+ * @param {Boolean} [hq]
  *
  * @return Uint8Array
  */
-function Renderer(phonemes, pitch, mouth, throat, speed, singmode) {
+function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
     pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
     mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
     throat = (throat === undefined) ? 128 : throat & 0xFF;
     speed = (speed || 72) & 0xFF;
     singmode = singmode || false;
+    hq = hq === true;
     // Every frame is 20ms long.
     var Output = CreateOutputBuffer(441 // = (22050/50)
         * phonemes.reduce(function (pre, v) { return pre + (v[1] * 20); }, 0) / 50 // Combined phoneme length in ms.
@@ -2278,8 +2280,13 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode) {
         };
         // Removed sine table stored a pre calculated sine wave but in modern CPU, we can calculate inline.
         var sinus = function (x) {
-            return ((Math.sin((2 * Math.PI) *
-                (x / 255)) * 128 | 0) / 16 | 0) * 16;
+            var value = Math.sin((2 * Math.PI) * (x / 255)) * 128;
+            if (hq) {
+                // High-precision: keep the full float amplitude instead of
+                // quantizing it to the step levels of the original simulation.
+                return value;
+            }
+            return ((value | 0) / 16 | 0) * 16;
         };
         var speedcounter = speed;
         var phase1 = 0;
@@ -2323,7 +2330,15 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode) {
                         var /* signed int */ mux = sin1 + sin2 + rect;
                         mux /= 32;
                         mux += 128; // Go from signed to unsigned amplitude
-                        ary[k] = mux | 0;
+                        if (hq) {
+                            // High-precision: round to nearest and clamp instead of the
+                            // wraparound the 8-bit simulation produces when the mix
+                            // exceeds the byte range.
+                            ary[k] = Math.min(255, Math.max(0, Math.round(mux)));
+                        }
+                        else {
+                            ary[k] = mux | 0;
+                        }
                         p1 += frequency[0][pos] * 256 / 4; // Compromise, this becomes a shift and works well
                         p2 += frequency[1][pos] * 256 / 4;
                         p3 += frequency[2][pos] * 256 / 4;
@@ -2435,6 +2450,7 @@ function SamBuffer16(input, options) {
  * @param {Number}  [options.speed]    Default 72.
  * @param {Number}  [options.mouth]    Default 128.
  * @param {Number}  [options.throat]   Default 128.
+ * @param {Boolean} [options.hq]       High-precision render path. Default false.
  *
  * @return {Uint8Array|Boolean}
  */
@@ -2445,7 +2461,7 @@ function SamProcess(input, options) {
     if (false === parsed) {
         return false;
     }
-    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode);
+    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
 }
 
 /**
@@ -2527,7 +2543,36 @@ var charFlags = {
     '_': 0,
     '`': 0 | 0x20,
 };
-var rules$1 = ' (A.)=EH4Y. |' +
+var rules$1 = 
+// Modern vocabulary, matched per whole word before the classic rule set.
+// Targets are composed from the letter-name rules below ("A."=EH4Y.,
+// I=AY4, G=JIY4, J=JEY4, K=KEY4, O=OH4W, ...).
+' (AI.) =EH4Y.AY4. |' +
+    ' (AI) =EH4Y.AY4.|' +
+    ' (API) =EY4PIYAY4|' +
+    ' (ANI) =EY4EH4NAY4|' +
+    ' (AGI) =EY4JIYAY4|' +
+    ' (ASI) =EY4EH4SAY4|' +
+    ' (CPU) =SIYPIYYUW4|' +
+    ' (GPU) =JIYPIYYUW4|' +
+    ' (USB) =YUWEH4SBIY4|' +
+    ' (HTTP.) =EY4CHTIYTIYPIY4. |' +
+    ' (HTTP) =EY4CHTIYTIYPIY4|' +
+    ' (HTTPS) =EY4CHTIYTIYPIYEH4S|' +
+    ' (HTML) =EY4CHTIYEH4MEH4L|' +
+    ' (CSS) =SIYEH4SEH4S|' +
+    ' (PDF.) =PIYDIYEH4F. |' +
+    ' (PDF) =PIYDIYEH4F|' +
+    ' (MP3) =EH4MPIYTHRIY4|' +
+    ' (OS.) =OHEH4S. |' +
+    ' (OS) =OHEH4S|' +
+    ' (TTS) =TIYTIYEH4S|' +
+    ' (JS) =JEYEH4S|' +
+    ' (JSON) =JEYSAH4N|' +
+    ' (OCR) =OHSIYAAR4|' +
+    ' (QR) =KEYAAR4|' +
+    ' (WIFI) =WAY4FAY4|' +
+    ' (A.)=EH4Y. |' +
     '(A) =AH|' +
     ' (ARE) =AAR|' +
     ' (AR)O=AXR|' +
