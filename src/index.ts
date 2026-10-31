@@ -90,11 +90,28 @@ function resolveOptions (
 }
 
 /**
- * Phonetic handling for the static helpers: recite plain English text,
- * uppercase phonetic input.
+ * Phonetic handling shared by the instance methods and the static
+ * helpers: recite plain English text, uppercase phonetic input. Blank
+ * input is treated as a parse failure (the methoods return false
+ * instead of synthesizing silence).
  */
-function staticEnsurePhonetic (input: string, merged: SamOptions): string {
-  return merged.phonetic ? input.toUpperCase() : (TextToPhonemes(input) as string);
+function ensurePhonetic (text: string, merged: SamOptions): string | false {
+  if (text.trim() === '') {
+    return false;
+  }
+  return merged.phonetic ? text.toUpperCase() : (TextToPhonemes(text) as string | false);
+}
+
+/**
+ * Render and package a complete .wav file image, shared by the instance
+ * toWav() and the static SamJs.toWav().
+ */
+function renderWav (text: string, options: SamOptions): SamProcessResult {
+  const buffer = SamProcess(ensurePhonetic(text, options), options) as SamProcessResult;
+  if (buffer === false) {
+    return false;
+  }
+  return BuildWav(buffer, options.bits);
 }
 
 /**
@@ -111,13 +128,6 @@ function staticEnsurePhonetic (input: string, merged: SamOptions): string {
  */
 function samJsFactory (options?: SamOptions): SamJsInstance {
   const opts = options || {};
-
-  const ensurePhonetic = (text: string, merged: SamOptions): string => {
-    if (!merged.phonetic) {
-      return TextToPhonemes(text) as string;
-    }
-    return text.toUpperCase();
-  }
 
   return {
     /**
@@ -191,12 +201,7 @@ function samJsFactory (options?: SamOptions): SamJsInstance {
      * @return {Uint8Array|Boolean} The complete .wav file image, or false.
      */
     toWav (text: string, callOptions?: SamInputOptions): SamProcessResult {
-      const merged = resolveOptions(opts, callOptions);
-      const buffer = SamProcess(ensurePhonetic(text, merged), merged) as SamProcessResult;
-      if (buffer === false) {
-        return false;
-      }
-      return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+      return renderWav(text, resolveOptions(opts, callOptions));
     },
 
     /**
@@ -219,7 +224,7 @@ function samJsFactory (options?: SamOptions): SamJsInstance {
       if (buffer === false) {
         throw new Error('SamJs.download(): could not parse the passed text.');
       }
-      RenderBuffer(buffer, filename || 'sam.wav', merged.bits === 16 ? 16 : 8);
+      RenderBuffer(buffer, filename || 'sam.wav', merged.bits);
     },
   };
 }
@@ -272,25 +277,18 @@ Object.assign(SamJs, {
   /** Raw 8-bit renderer, see SamProcess(). */
   buf8: (input: string, options?: SamOptions): SamProcessResult => {
     const merged: SamOptions = options || {};
-    return SamProcess(staticEnsurePhonetic(input, merged), merged) as SamProcessResult;
+    return SamProcess(ensurePhonetic(input, merged), merged) as SamProcessResult;
   },
   /** Signed 16-bit samples, see SamBuffer16(). */
   buf16: (input: string, options?: SamOptions): SamBuffer16Result => {
     const merged: SamOptions = options || {};
-    return SamBuffer16(staticEnsurePhonetic(input, merged), merged) as SamBuffer16Result;
+    return SamBuffer16(ensurePhonetic(input, merged), merged) as SamBuffer16Result;
   },
   /** Raw 32-bit renderer, see SamBuffer(). */
   buf32: (input: string, options?: SamOptions): SamBufferResult => {
     const merged: SamOptions = options || {};
-    return SamBuffer(staticEnsurePhonetic(input, merged), merged) as SamBufferResult;
+    return SamBuffer(ensurePhonetic(input, merged), merged) as SamBufferResult;
   },
   /** Render and return a complete .wav file image (browser and Node). */
-  toWav: (input: string, options?: SamOptions): SamProcessResult => {
-    const merged: SamOptions = options || {};
-    const buffer = SamProcess(staticEnsurePhonetic(input, merged), merged) as SamProcessResult;
-    if (buffer === false) {
-      return false;
-    }
-    return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
-  },
+  toWav: (input: string, options?: SamOptions): SamProcessResult => renderWav(input, options || {}),
 });

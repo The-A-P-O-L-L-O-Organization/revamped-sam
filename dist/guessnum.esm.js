@@ -2381,7 +2381,7 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
 /**
  * Process the input and play the audio buffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -2406,7 +2406,7 @@ function SamSpeak (input, options) {
 /**
  * Process the input and return the audio buffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -2430,7 +2430,7 @@ function SamBuffer (input, options) {
 /**
  * Process the input and return the audiobuffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.

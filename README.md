@@ -143,6 +143,12 @@ pnpm install
 pnpm build
 ```
 
+Note on running the sources directly with `node --experimental-strip-types`:
+the package intentionally stays typeless (`"type"` is unset, because the
+build/test toolchain is CommonJS), so Node prints a
+`MODULE_TYPELESS_PACKAGE_JSON` warning for type-stripped entry points. It is
+harmless — use `pnpm build`/`pnpm test` or import `dist/` normally.
+
 The development toolchain is modernized for Node 26: the build uses Rollup 4 +
 Terser instead of Rollup 1 + Uglify, tests run on Mocha 11, and the retired
 Karma browser harness was removed (the fixture-based regression suites cover
@@ -171,7 +177,10 @@ Library consumers get:
 - editor autocomplete and strict option validation: misspelled keys
   (`SingMode` instead of `singmode`) are rejected and `bits` only accepts
   `8 | 16` — in the constructor and in the per-call overrides
-  (`SamInputOptions = boolean | SamCallOptions`) alike;
+  (`SamInputOptions = boolean | SamCallOptions`) alike. This protection is
+  compile-time only: plain JavaScript callers are not checked for unknown
+  keys at runtime (invalid `bits` values and blank input do fail loudly at
+  runtime — `BuildWav` throws, the renderers return `false`);
 - the exact result shapes as exported types: `SamProcessResult`
   (`Uint8Array | false`), `SamBuffer16Result` (`Int16Array | false`) and
   `SamBufferResult` (`Float32Array | false`);

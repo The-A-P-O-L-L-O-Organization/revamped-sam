@@ -140,6 +140,26 @@ describe('render API extensions', () => {
     it('should return false for unparsable text', () => {
       assert.strictEqual(new SamJs({}).toWav('`'), false);
     });
+
+    it('should treat blank input as unparsable', () => {
+      assert.strictEqual(new SamJs({}).toWav(''), false);
+      assert.strictEqual(SamJs.toWav('  '), false);
+    });
+
+    it('should reject invalid bits instead of coercing', () => {
+      assert.throws(() => new SamJs({}).toWav('/HEHLOW', { phonetic: true, bits: 12 }), /bits.*12/);
+      assert.throws(() => SamJs.toWav('/HEHLOW', { phonetic: true, bits: 0 }), /bits/);
+    });
+  });
+
+  describe('input handling', () => {
+    it('blank input should return false in every renderer', () => {
+      assert.strictEqual(new SamJs({}).buf8(''), false);
+      assert.strictEqual(new SamJs({}).buf16(''), false);
+      assert.strictEqual(new SamJs({}).buf32(''), false);
+      assert.strictEqual(new SamJs({}).toWav('  ') , false);
+      assert.strictEqual(SamJs.toWav(''), false);
+    });
   });
 
   describe('buf16()', () => {

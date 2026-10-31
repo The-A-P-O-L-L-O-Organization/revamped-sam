@@ -6,7 +6,7 @@ import Renderer from '../renderer/renderer.js';
 /**
  * Process the input and play the audio buffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -31,7 +31,7 @@ export function SamSpeak (input, options) {
 /**
  * Process the input and return the audio buffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -59,7 +59,7 @@ export function SamBuffer (input, options) {
  * every byte sample is represented exactly (worked out as a signed shift),
  * no quantization is applied on top of what the synthesis itself produces.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -88,7 +88,7 @@ export function SamBuffer16 (input, options) {
 /**
  * Process the input and return the audiobuffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.

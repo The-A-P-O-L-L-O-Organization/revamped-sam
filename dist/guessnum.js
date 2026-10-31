@@ -2387,7 +2387,7 @@
   /**
    * Process the input and play the audio buffer.
    *
-   * @param {String} input
+   * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
    *
    * @param {object}  [options]
    * @param {Boolean} [options.singmode] Default false.
@@ -2412,7 +2412,7 @@
   /**
    * Process the input and return the audio buffer.
    *
-   * @param {String} input
+   * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
    *
    * @param {object}  [options]
    * @param {Boolean} [options.singmode] Default false.
@@ -2436,7 +2436,7 @@
   /**
    * Process the input and return the audiobuffer.
    *
-   * @param {String} input
+   * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
    *
    * @param {object}  [options]
    * @param {Boolean} [options.singmode] Default false.

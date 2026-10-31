@@ -2387,7 +2387,7 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
 /**
  * Process the input and return the audio buffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -2413,7 +2413,7 @@ function SamBuffer(input, options) {
  * every byte sample is represented exactly (worked out as a signed shift),
  * no quantization is applied on top of what the synthesis itself produces.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -2439,7 +2439,7 @@ function SamBuffer16(input, options) {
 /**
  * Process the input and return the audiobuffer.
  *
- * @param {String} input
+ * @param {String|Boolean} input  Blank (or falsy) input is treated as a parse failure.
  *
  * @param {object}  [options]
  * @param {Boolean} [options.singmode] Default false.
@@ -3343,11 +3343,27 @@ function resolveOptions(base, callOptions) {
     return callOptions ? Object.assign(Object.assign({}, base), callOptions) : base;
 }
 /**
- * Phonetic handling for the static helpers: recite plain English text,
- * uppercase phonetic input.
+ * Phonetic handling shared by the instance methods and the static
+ * helpers: recite plain English text, uppercase phonetic input. Blank
+ * input is treated as a parse failure (the methoods return false
+ * instead of synthesizing silence).
  */
-function staticEnsurePhonetic(input, merged) {
-    return merged.phonetic ? input.toUpperCase() : TextToPhonemes(input);
+function ensurePhonetic(text, merged) {
+    if (text.trim() === '') {
+        return false;
+    }
+    return merged.phonetic ? text.toUpperCase() : TextToPhonemes(text);
+}
+/**
+ * Render and package a complete .wav file image, shared by the instance
+ * toWav() and the static SamJs.toWav().
+ */
+function renderWav(text, options) {
+    var buffer = SamProcess(ensurePhonetic(text, options), options);
+    if (buffer === false) {
+        return false;
+    }
+    return BuildWav(buffer, options.bits);
 }
 /**
  * SamJs - The Software Automatic Mouth.
@@ -3363,12 +3379,6 @@ function staticEnsurePhonetic(input, merged) {
  */
 function samJsFactory(options) {
     var opts = options || {};
-    var ensurePhonetic = function (text, merged) {
-        if (!merged.phonetic) {
-            return TextToPhonemes(text);
-        }
-        return text.toUpperCase();
-    };
     return {
         /**
          * Render the passed text as an 8bit wave buffer array.
@@ -3437,12 +3447,7 @@ function samJsFactory(options) {
          * @return {Uint8Array|Boolean} The complete .wav file image, or false.
          */
         toWav: function toWav(text, callOptions) {
-            var merged = resolveOptions(opts, callOptions);
-            var buffer = SamProcess(ensurePhonetic(text, merged), merged);
-            if (buffer === false) {
-                return false;
-            }
-            return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
+            return renderWav(text, resolveOptions(opts, callOptions));
         },
         /**
          * Render the passed text as wave buffer and download it via URL API
@@ -3464,7 +3469,7 @@ function samJsFactory(options) {
             if (buffer === false) {
                 throw new Error('SamJs.download(): could not parse the passed text.');
             }
-            RenderBuffer(buffer, filename || 'sam.wav', merged.bits === 16 ? 16 : 8);
+            RenderBuffer(buffer, filename || 'sam.wav', merged.bits);
         },
     };
 }
@@ -3477,27 +3482,20 @@ Object.assign(SamJs, {
     /** Raw 8-bit renderer, see SamProcess(). */
     buf8: function (input, options) {
         var merged = options || {};
-        return SamProcess(staticEnsurePhonetic(input, merged), merged);
+        return SamProcess(ensurePhonetic(input, merged), merged);
     },
     /** Signed 16-bit samples, see SamBuffer16(). */
     buf16: function (input, options) {
         var merged = options || {};
-        return SamBuffer16(staticEnsurePhonetic(input, merged), merged);
+        return SamBuffer16(ensurePhonetic(input, merged), merged);
     },
     /** Raw 32-bit renderer, see SamBuffer(). */
     buf32: function (input, options) {
         var merged = options || {};
-        return SamBuffer(staticEnsurePhonetic(input, merged), merged);
+        return SamBuffer(ensurePhonetic(input, merged), merged);
     },
     /** Render and return a complete .wav file image (browser and Node). */
-    toWav: function (input, options) {
-        var merged = options || {};
-        var buffer = SamProcess(staticEnsurePhonetic(input, merged), merged);
-        if (buffer === false) {
-            return false;
-        }
-        return BuildWav(buffer, merged.bits === 16 ? 16 : 8);
-    },
+    toWav: function (input, options) { return renderWav(input, options || {}); },
 });
 
 export { SamJs as default };
