@@ -174,13 +174,13 @@ plain-ESM JavaScript, guarded by the golden fixtures.
 
 Library consumers get:
 
-- editor autocomplete and strict option validation: misspelled keys
+- editor autocomplete and option validation: misspelled keys
   (`SingMode` instead of `singmode`) are rejected and `bits` only accepts
   `8 | 16` — in the constructor and in the per-call overrides
-  (`SamInputOptions = boolean | SamCallOptions`) alike. This protection is
-  compile-time only: plain JavaScript callers are not checked for unknown
-  keys at runtime (invalid `bits` values and blank input do fail loudly at
-  runtime — `BuildWav` throws, the renderers return `false`);
+  (`SamInputOptions = boolean | SamCallOptions`) alike. TypeScript
+  consumers are checked at compile time; plain JavaScript callers get the
+  same protection at runtime (`Unknown option "SingMode"` on first render,
+  and invalid `bits` values or blank input also fail loudly at runtime);
 - the exact result shapes as exported types: `SamProcessResult`
   (`Uint8Array | false`), `SamBuffer16Result` (`Int16Array | false`) and
   `SamBufferResult` (`Float32Array | false`);

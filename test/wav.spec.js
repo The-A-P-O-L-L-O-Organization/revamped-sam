@@ -178,6 +178,24 @@ describe('render API extensions', () => {
   });
 
   describe('per-call option overrides', () => {
+    it('should reject unknown options at runtime (constructor)', () => {
+      assert.throws(
+        () => new SamJs({ SingMode: true }).buf8('/HEHLOW', true),
+        /Unknown option "SingMode"/
+      );
+    });
+
+    it('should reject unknown options at runtime (per-call, instance and static)', () => {
+      assert.throws(
+        () => new SamJs({}).buf8('/HEHLOW', { phonetic: true, Sped: 5 }),
+        /Unknown option "Sped"/
+      );
+      assert.throws(
+        () => SamJs.buf8('/HEHLOW', { phonetic: true, Bits: 16 }),
+        /Unknown option "Bits"/
+      );
+    });
+
     it('the boolean shorthand should keep working', () => {
       assert.deepEqual(
         Array.from(new SamJs({}).buf8('/HEHLOW', true)),

@@ -3338,16 +3338,35 @@ function TextToPhonemes(input) {
  *
  * @return {object} The merged options (with `phonetic`) for this call.
  */
+/**
+ * Keys accepted by SamOptions - the runtime validation allowlist.
+ * TypeScript gives this protection at compile time; plain JavaScript
+ * callers get it here at runtime.
+ */
+var ALLOWED_KEYS = [
+    'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq' ];
+function validateOptions(options) {
+    Object.keys(options).forEach(function (key) {
+        if (ALLOWED_KEYS.indexOf(key) === -1) {
+            throw new Error(("Unknown option \"" + key + "\" (accepted options: " + (ALLOWED_KEYS.join(', ')) + ")."));
+        }
+    });
+}
 function resolveOptions(base, callOptions) {
+    validateOptions(base);
     if (typeof callOptions === 'boolean') {
         return Object.assign({}, base, { phonetic: callOptions });
     }
-    return callOptions ? Object.assign(Object.assign({}, base), callOptions) : base;
+    if (callOptions) {
+        validateOptions(callOptions);
+        return Object.assign(Object.assign({}, base), callOptions);
+    }
+    return base;
 }
 /**
  * Phonetic handling shared by the instance methods and the static
  * helpers: recite plain English text, uppercase phonetic input. Blank
- * input is treated as a parse failure (the methoods return false
+ * input is treated as a parse failure (the methods return false
  * instead of synthesizing silence).
  */
 function ensurePhonetic(text, merged) {
@@ -3483,21 +3502,21 @@ Object.assign(SamJs, {
     convert: function (text) { return TextToPhonemes(text); },
     /** Raw 8-bit renderer, see SamProcess(). */
     buf8: function (input, options) {
-        var merged = options || {};
+        var merged = resolveOptions({}, options);
         return SamProcess(ensurePhonetic(input, merged), merged);
     },
     /** Signed 16-bit samples, see SamBuffer16(). */
     buf16: function (input, options) {
-        var merged = options || {};
+        var merged = resolveOptions({}, options);
         return SamBuffer16(ensurePhonetic(input, merged), merged);
     },
     /** Raw 32-bit renderer, see SamBuffer(). */
     buf32: function (input, options) {
-        var merged = options || {};
+        var merged = resolveOptions({}, options);
         return SamBuffer(ensurePhonetic(input, merged), merged);
     },
     /** Render and return a complete .wav file image (browser and Node). */
-    toWav: function (input, options) { return renderWav(input, options || {}); },
+    toWav: function (input, options) { return renderWav(input, resolveOptions({}, options)); },
 });
 
 module.exports = SamJs;
