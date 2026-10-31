@@ -1,0 +1,78 @@
+diff --git a/dist/cjs.js b/dist/cjs.js
+index 7c36cbdd06cc22c92d590be3f87a08a91ca06b40..64c875398b5c01bea413b537f2e0ee6d8fd35d3c 100644
+--- a/dist/cjs.js
++++ b/dist/cjs.js
+@@ -76,14 +76,21 @@ function propertyIsUnsafe(target, key) {
+ 			&& Object.propertyIsEnumerable.call(target, key)) // and also unsafe if they're nonenumerable.
+ }
+ 
++// security fix: never write prototype-chain keys into the result
++function isUnsafeKey(key) {
++	return key === '__proto__' || key === 'constructor' || key === 'prototype';
++}
++
+ function mergeObject(target, source, options) {
+ 	var destination = {};
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (isUnsafeKey(key)) return
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 		});
+ 	}
+ 	getKeys(source).forEach(function(key) {
++		if (isUnsafeKey(key)) return
+ 		if (propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
+diff --git a/dist/umd.js b/dist/umd.js
+index 4071e7c56ec8e5273fe166f6e723ac460fab8b72..aaa7428856ad274b500f90e9203d5c921c008e89 100644
+--- a/dist/umd.js
++++ b/dist/umd.js
+@@ -80,14 +80,21 @@
+ 				&& Object.propertyIsEnumerable.call(target, key)) // and also unsafe if they're nonenumerable.
+ 	}
+ 
++	// security fix: never write prototype-chain keys into the result
++	function isUnsafeKey(key) {
++		return key === '__proto__' || key === 'constructor' || key === 'prototype';
++	}
++
+ 	function mergeObject(target, source, options) {
+ 		var destination = {};
+ 		if (options.isMergeableObject(target)) {
+ 			getKeys(target).forEach(function(key) {
++				if (isUnsafeKey(key)) return
+ 				destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 			});
+ 		}
+ 		getKeys(source).forEach(function(key) {
++			if (isUnsafeKey(key)) return
+ 			if (propertyIsUnsafe(target, key)) {
+ 				return
+ 			}
+diff --git a/index.js b/index.js
+index 77968aed5d456cccc294f60912ef381fa1e52a7b..0696b6f1d5cd35ffc8c7ea0c33abc07f5b642b19 100644
+--- a/index.js
++++ b/index.js
+@@ -51,14 +51,21 @@ function propertyIsUnsafe(target, key) {
+ 			&& Object.propertyIsEnumerable.call(target, key)) // and also unsafe if they're nonenumerable.
+ }
+ 
++// security fix: never write prototype-chain keys into the result
++function isUnsafeKey(key) {
++	return key === '__proto__' || key === 'constructor' || key === 'prototype';
++}
++
+ function mergeObject(target, source, options) {
+ 	var destination = {}
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (isUnsafeKey(key)) return
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options)
+ 		})
+ 	}
+ 	getKeys(source).forEach(function(key) {
++		if (isUnsafeKey(key)) return
+ 		if (propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
