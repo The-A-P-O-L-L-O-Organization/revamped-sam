@@ -71,15 +71,6 @@ import BuildWav from './util/wav.js';
 import TextToPhonemes from './reciter/reciter.js';
 
 /**
- * SamOptions for one call: merge the constructor options with the
- * per-call overrides and detect the phonetic flag.
- *
- * @param {object}   constructor options.
- * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
- *
- * @return {object} The merged options (with `phonetic`) for this call.
- */
-/**
  * Keys accepted by SamOptions - the runtime validation allowlist.
  * TypeScript gives this protection at compile time; plain JavaScript
  * callers get it here at runtime.
@@ -88,6 +79,11 @@ const ALLOWED_KEYS = [
   'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq',
 ];
 
+/**
+ * Reject any option key the engine does not understand, so plain
+ * JavaScript callers get the same protection the TypeScript consumers
+ * get at compile time.
+ */
 function validateOptions (options: SamOptions): void {
   Object.keys(options).forEach(function (key) {
     if (ALLOWED_KEYS.indexOf(key) === -1) {
@@ -98,11 +94,21 @@ function validateOptions (options: SamOptions): void {
   });
 }
 
+/**
+ * SamOptions for one call: merge the constructor options with the
+ * per-call overrides and detect the phonetic flag.
+ *
+ * @param {object}   [base]       constructor options.
+ * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
+ *
+ * @return {object} The merged options (with `phonetic`) for this call.
+ */
 function resolveOptions (
   base: SamOptions,
   callOptions?: SamInputOptions
 ): SamOptions {
-  validateOptions(base);  if (typeof callOptions === 'boolean') {
+  validateOptions(base);
+  if (typeof callOptions === 'boolean') {
     return Object.assign({}, base, {phonetic: callOptions});
   }
   if (callOptions) {
@@ -151,6 +157,7 @@ function renderWav (text: string, options: SamOptions): SamProcessResult {
  */
 function samJsFactory (options?: SamOptions): SamJsInstance {
   const opts = options || {};
+  validateOptions(opts);
 
   return {
     /**

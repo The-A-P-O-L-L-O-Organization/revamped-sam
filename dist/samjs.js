@@ -3334,21 +3334,17 @@
     }
 
     /**
-     * SamOptions for one call: merge the constructor options with the
-     * per-call overrides and detect the phonetic flag.
-     *
-     * @param {object}   constructor options.
-     * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
-     *
-     * @return {object} The merged options (with `phonetic`) for this call.
-     */
-    /**
      * Keys accepted by SamOptions - the runtime validation allowlist.
      * TypeScript gives this protection at compile time; plain JavaScript
      * callers get it here at runtime.
      */
     var ALLOWED_KEYS = [
         'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq' ];
+    /**
+     * Reject any option key the engine does not understand, so plain
+     * JavaScript callers get the same protection the TypeScript consumers
+     * get at compile time.
+     */
     function validateOptions(options) {
         Object.keys(options).forEach(function (key) {
             if (ALLOWED_KEYS.indexOf(key) === -1) {
@@ -3356,6 +3352,15 @@
             }
         });
     }
+    /**
+     * SamOptions for one call: merge the constructor options with the
+     * per-call overrides and detect the phonetic flag.
+     *
+     * @param {object}   [base]       constructor options.
+     * @param {SamInputOptions} [callOptions] boolean phonetic flag or per-call overrides.
+     *
+     * @return {object} The merged options (with `phonetic`) for this call.
+     */
     function resolveOptions(base, callOptions) {
         validateOptions(base);
         if (typeof callOptions === 'boolean') {
@@ -3404,6 +3409,7 @@
      */
     function samJsFactory(options) {
         var opts = options || {};
+        validateOptions(opts);
         return {
             /**
              * Render the passed text as an 8bit wave buffer array.
