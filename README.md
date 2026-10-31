@@ -179,8 +179,9 @@ Library consumers get:
   `8 | 16` — in the constructor and in the per-call overrides
   (`SamInputOptions = boolean | SamCallOptions`) alike. TypeScript
   consumers are checked at compile time; plain JavaScript callers get the
-  same protection at runtime (`Unknown option "SingMode"` on first render,
-  and invalid `bits` values or blank input also fail loudly at runtime);
+  same protection at runtime: constructor options are validated when the
+  `SamJs` instance is created, per-call overrides when the method is
+  called, and invalid `bits` values or blank input also fail loudly;
 - the exact result shapes as exported types: `SamProcessResult`
   (`Uint8Array | false`), `SamBuffer16Result` (`Int16Array | false`) and
   `SamBufferResult` (`Float32Array | false`);
