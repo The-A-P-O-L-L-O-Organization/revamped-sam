@@ -8,4 +8,5 @@ require('./renderer/renderer-c.spec');
 require('./renderer/renderer.spec');
 require('./renderer/renderer-vs-renderer-c.spec.js');
 require('./renderer/hq.spec.js');
+require('./renderer/masking.spec.js');
 require('./index.spec.js');

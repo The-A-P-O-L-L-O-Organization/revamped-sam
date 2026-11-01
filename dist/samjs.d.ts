@@ -46,6 +46,15 @@ export interface SamOptions {
      * crunchy than `false` (the authentic classic render). Default: false.
      */
     hq?: boolean;
+    /**
+     * Glottal-pulse "masking": re-syncs the phase of the formant generators
+     * to every glottal pulse, exactly as the original 6502 renderer does.
+     * This is the mechanism behind SAM's characteristic buzzy, crackly
+     * timbre. Disable it (`false`) to let the formant waves run without the
+     * pulse re-sync for a noticeably smoother, more natural voice. The
+     * render timing is identical either way. Default: true.
+     */
+    masking?: boolean;
 }
 /** The 8-bit wave buffer the renderer produces, or false if parsing failed. */
 export type SamProcessResult = Uint8Array | false;

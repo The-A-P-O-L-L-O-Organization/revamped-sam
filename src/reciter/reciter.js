@@ -3,9 +3,9 @@ import * as tables from './tables.js';
 import {
   FLAG_NUMERIC,
   FLAG_RULESET2,
+  FLAG_YOD_DROPPING,
   FLAG_VOICED,
-  FLAG_0X08,
-  FLAG_DIPTHONG,
+  FLAG_SIBILANT,
   FLAG_CONSONANT,
   FLAG_VOWEL_OR_Y,
   FLAG_ALPHA_OR_QUOT
@@ -85,20 +85,29 @@ function reciterRule (ruleString) {
           ' ': () => !flagsAt(text, --pos, FLAG_ALPHA_OR_QUOT),
           // '#' - previous char must be a vowel or Y.
           '#': () => flagsAt(text, --pos, FLAG_VOWEL_OR_Y),
-          // '.' - unknown?
-          '.': () => flagsAt(text, --pos, FLAG_0X08),
-          // '&' - previous char must be a dipthong or previous chars must be 'CH' or 'SH'
-          '&': () => (flagsAt(text, --pos, FLAG_DIPTHONG)) || (isOneOf(text.substr(--pos, 2), ['CH', 'SH'])),
-          // '@' - previous char must be voiced and not 'H'.
+          // '.' - previous char must be a voiced consonant (B, D, G, J, L, M,
+          //      N, R, V, W, Z; drives e.g. .E(D) -> D and .(S) -> Z).
+          '.': () => flagsAt(text, --pos, FLAG_VOICED),
+          // '&' - previous char must be a sibilant letter (C, S or X) or the
+          //      previous chars must be 'CH' or 'SH'.
+          '&': () => (flagsAt(text, --pos, FLAG_SIBILANT)) || (isOneOf(text.substr(--pos, 2), ['CH', 'SH'])),
+          // '@' - previous char must be one of the yod-dropping consonants
+          //      D, G, J, L, N, R, S, T, Z: the letters before which the
+          //      orthographic 'U'/'EW' is read /u:/ without a /j/ glide
+          //      (cf. the rules @(U), @(EW), @(UR)#).
           '@': () => {
-            if (flagsAt(text, --pos, FLAG_VOICED)) {
+            if (flagsAt(text, --pos, FLAG_YOD_DROPPING)) {
               return true;
             }
-            // Not voiced, so the rule cannot match. Note: the original 6510
-            // code contained a second check of the same character against
-            // 'H' and then 'T', 'C', 'S' here, which was unreachable dead
-            // code (see the FIXME in the original reciter.c); it always
-            // returned false. That is all that is left to do here.
+            // Not in the yod-dropping set, so the rule cannot match. The
+            // original 6510 code contained a second check of the same
+            // character here which was unreachable dead code (see the
+            // FIXME in the original reciter.c); the corresponding C port
+            // reads: "A = inputtemp[X]; if (A != 72) goto pos36700;
+            // if ((A != 84) && (A != 67) && (A != 83)) goto pos36700;" i.e.
+            // A==72 ('H') can never simultaneously differ from 'T', 'C' and
+            // 'S'. It always returned false. That is all that is left to do
+            // here.
             return false;
           },
           // '^' - previous char must be a consonant.
@@ -143,19 +152,25 @@ function reciterRule (ruleString) {
           ' ': () => !flagsAt(text, ++pos, FLAG_ALPHA_OR_QUOT),
           // '#' - next char must be a vowel or Y.
           '#': () => flagsAt(text, ++pos, FLAG_VOWEL_OR_Y),
-          // '.' - unknown?
-          '.': () => flagsAt(text, ++pos, FLAG_0X08),
-          // '&' - next char must be a dipthong or next chars must be 'HC' or 'HS'
-          '&': () => flagsAt(text, ++pos, FLAG_DIPTHONG) || isOneOf(text.substr((++pos) - 2, 2), ['HC', 'HS']),
-          // '@' - next char must be voiced and not 'H'.
+          // '.' - next char must be a voiced consonant (B, D, G, J, L, M, N,
+          //      R, V, W, Z; drives e.g. .E(D) -> D and .(S) -> Z).
+          '.': () => flagsAt(text, ++pos, FLAG_VOICED),
+          // '&' - next char must be a sibilant letter (C, S or X) or the
+          //      next chars must be 'HC' or 'HS' (i.e. 'CH'/'SH' seen from
+          //      the match position).
+          '&': () => flagsAt(text, ++pos, FLAG_SIBILANT) || isOneOf(text.substr((++pos) - 2, 2), ['HC', 'HS']),
+          // '@' - next char must be one of the yod-dropping consonants
+          //      D, G, J, L, N, R, S, T, Z: the letters before which the
+          //      orthographic 'U'/'EW' is read /u:/ without a /j/ glide
+          //      (cf. the rules @(U), @(EW), @(UR)#).
           '@': () => {
-            if (flagsAt(text, ++pos, FLAG_VOICED)) {
+            if (flagsAt(text, ++pos, FLAG_YOD_DROPPING)) {
               return true;
             }
-            // Not voiced, so the rule cannot match. Note: the original 6510
-            // code contained a second check of the same character against
-            // 'H' and 'T', 'C', 'S' here, which was unreachable dead code
-            // (bug in the original code, see reciter.c:489 / pos37367);
+            // Not in the yod-dropping set, so the rule cannot match. Note:
+            // the original 6510 code contained a second check of the same
+            // character against 'H' and 'T', 'C', 'S' here, which was
+            // unreachable dead code (bug in the original code, see reciter.c:489 / pos37367);
             // it always returned false. That is all that is left to do here.
             return false;
           },

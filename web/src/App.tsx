@@ -32,7 +32,7 @@ type ControlKey = (typeof CONTROLS)[number]['key']
 type Opts = Record<ControlKey, number>
 
 /** Lower the initial settings from URLSearchParams, if present. */
-function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolean } {
+function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolean; masking: boolean } {
   const params = new URLSearchParams(window.location.search)
   const clamp = (key: ControlKey, fallback: number) => {
     const raw = Number.parseInt(params.get(key) ?? '', 10)
@@ -52,6 +52,7 @@ function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolea
     },
     bits: bits === 16 ? 16 : 8,
     hq: params.get('hq') === '1',
+    masking: params.get('masking') !== '0',
   }
 }
 
@@ -81,6 +82,7 @@ export default function App() {
   const [opts, setOpts] = useState<Opts>(initial.opts)
   const [bits, setBits] = useState<8 | 16>(initial.bits)
   const [hq, setHq] = useState(initial.hq)
+  const [masking, setMasking] = useState(initial.masking)
   const [speaking, setSpeaking] = useState(false)
   const [copied, setCopied] = useState(false)
   const [phonemes, setPhonemes] = useState<string | false>(false)
@@ -98,12 +100,13 @@ export default function App() {
     params.set('throat', String(opts.throat))
     params.set('b', String(bits))
     params.set('hq', hq ? '1' : '0')
+    params.set('masking', masking ? '1' : '0')
     window.history.replaceState(
       null,
       '',
       `${window.location.pathname}?${params}`
     )
-  }, [text, opts, bits, hq])
+  }, [text, opts, bits, hq, masking])
 
   // Phoneme preview, refreshed as the text settles.
   useEffect(() => {
@@ -121,7 +124,7 @@ export default function App() {
       if (!canvas || !context) {
         return
       }
-      const samples = orFallback(() => sam.buf8(text, { hq }), false)
+      const samples = orFallback(() => sam.buf8(text, { hq, masking }), false)
       context.clearRect(0, 0, canvas.width, canvas.height)
       if (samples === false || samples.length === 0) {
         return
@@ -167,7 +170,7 @@ export default function App() {
       context.stroke()
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [text, sam, hq])
+  }, [text, sam, hq, masking])
 
   useEffect(() => {
     if (!copied) {
@@ -180,7 +183,7 @@ export default function App() {
   async function speak() {
     setSpeaking(true)
     try {
-      await sam.speak(text, { hq })
+      await sam.speak(text, { hq, masking })
     } finally {
       setSpeaking(false)
     }
@@ -303,6 +306,26 @@ export default function App() {
             </div>
 
             <div className="flex items-center justify-between gap-2">
+              <Label>Pulse masking</Label>
+              <div className="flex gap-2" role="group" aria-label="Glottal pulse masking">
+                {([
+                  { value: true, label: 'Authentic' },
+                  { value: false, label: 'Smooth' },
+                ] as const).map((mode) => (
+                  <Button
+                    key={String(mode.value)}
+                    variant={masking === mode.value ? 'default' : 'outline'}
+                    size="sm"
+                    aria-pressed={masking === mode.value}
+                    onClick={() => setMasking(mode.value)}
+                  >
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
               <Label>WAV precision</Label>
               <div className="flex gap-2" role="group" aria-label="WAV precision">
                 {([8, 16] as const).map((precision) => (
@@ -334,7 +357,7 @@ export default function App() {
                 size="lg"
                 className="flex-1"
                 aria-label="Download the rendered speech as a .wav file"
-                onClick={() => sam.download(text, { phonetic: false, bits, hq }, fileNameOf(text))}
+                onClick={() => sam.download(text, { phonetic: false, bits, hq, masking }, fileNameOf(text))}
                 disabled={text.trim().length === 0}
               >
                 Download .wav

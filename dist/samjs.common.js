@@ -737,7 +737,8 @@ function Parser1(input, addPhoneme, addStress) {
             continue;
         }
         // Should be a stress character. Search through the stress table backwards.
-        match = StressTable.length;
+        // Start at the last table entry: stress values are stored low to high.
+        match = StressTable.length - 1;
         while ((sign1 !== StressTable[match]) && (match > 0)) {
             --match;
         }
@@ -780,7 +781,7 @@ var FLAG_CONSONANT$1 = 0x0040;
  *
  */
 var FLAG_DIP_YX = 0x0020;
-var FLAG_DIPTHONG$1 = 0x0010;
+var FLAG_DIPTHONG = 0x0010;
 /** unknown:
  *    'M*', 'N*', 'NX', 'DX', 'Q*', 'CH', 'J*', 'B*', '**', '**', 'D*',
  *    '**', '**', 'G*', '**', '**', 'GX', '**', '**', 'P*', '**', '**',
@@ -869,7 +870,7 @@ function Parser2(insertPhoneme, setPhoneme, getPhoneme, getStress) {
         if (phoneme === 0) {
             continue;
         }
-        if (phonemeHasFlag(phoneme, FLAG_DIPTHONG$1)) {
+        if (phonemeHasFlag(phoneme, FLAG_DIPTHONG)) {
             // If ends with IY, use YX, else use WX
             // Insert at WX or YX following, copying the stress
             // 'WX' = 20 'YX' = 21
@@ -1052,7 +1053,11 @@ function AdjustLengths(getPhoneme, setLength, getLength) {
                 continue;
             }
             // Got here if not <VOWEL>
-            // FIXME: the case when phoneme === END is taken over by !phonemeHasFlag(phoneme, FLAG_CONSONANT)
+            // Note: phoneme came from the loop header, so it is never END here
+            // (END exits the while); the next-position phoneme re-fetched above
+            // CAN be END, but it always leaves through the "not a consonant"
+            // branch. The ternary below is therefore defensive only (mirroring
+            // the mem56 = 65 substitution the C port makes for the end marker).
             var flags = (phoneme === END) ? (FLAG_CONSONANT$1 | FLAG_UNVOICED_STOPCONS) : phonemeFlags[phoneme];
             // Unvoiced
             if (!matchesBitmask(flags, FLAG_VOICED$1)) {
@@ -1325,7 +1330,14 @@ function Parser(input) {
     for (var i = 0; i < phonemeindex.length; i++) {
         if (phonemeindex[i] > 80) {
             phonemeindex[i] = END;
-            // FIXME: When will this ever be anything else than END?
+            // In the 6502 original this sweep runs after the parser and
+            // Code41240 etc. and truncates at the first out-of-range index: the
+            // fixed-size 60-entry table there can retain garbage values (81..255)
+            // beyond the phonemes, so anything > 80 that is not already the END
+            // marker is erased here. Our JS tables grow dynamically and every
+            // producer only writes values <= 80 (or END/BREAK), so the first
+            // out-of-range value found is always the terminating END itself;
+            // the loop still breaks at it just as in the original.
             break; // error: delete all behind it
         }
     }
@@ -2008,8 +2020,12 @@ function AddInflection(inflection, pos, pitches) {
         pos -= 30;
     }
     var A;
-    // FIXME: Explain this fix better, it's not obvious
-    // ML : A =, fixes a problem with invalid pitch with '.'
+    // Skip frames with pitch 127. Without this, the inflection ramp below
+    // starts from such a frame and produces garbage pitch when the base pitch
+    // (byte) plus stress offset happens to wrap to exactly 127; e.g. with
+    // pitch setting 121, every stressed frame (offset +6) lands on 127 and
+    // the ramp above the frames ran away from the byte range. The C64
+    // disassembly does the same scan (Lbd03: advance while pitches[X]==$7f).
     while ((A = pitches[pos]) === 127) {
         ++pos;
     }
@@ -2125,16 +2141,19 @@ function CreateOutputBuffer(buffersize) {
  * @param {Number} [speed]
  * @param {Boolean} [singmode]
  * @param {Boolean} [hq]
+ * @param {Boolean} [masking] Re-sync the formant generators to every glottal
+ *                             pulse (the authentic behavior). Default true.
  *
  * @return Uint8Array
  */
-function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
+function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) {
     pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
     mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
     throat = (throat === undefined) ? 128 : throat & 0xFF;
     speed = (speed || 72) & 0xFF;
     singmode = singmode || false;
     hq = hq === true;
+    masking = masking === false ? false : true;
     // Every frame is 20ms long.
     var Output = CreateOutputBuffer(441 // = (22050/50)
         * phonemes.reduce(function (pre, v) { return pre + (v[1] * 20); }, 0) / 50 // Combined phoneme length in ms.
@@ -2143,7 +2162,10 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
     var freqdata = SetMouthThroat(mouth, throat);
     // Main render loop.
     var srcpos = 0; // Position in source
-    // FIXME: should be tuple buffer as well.
+    // The tuples here are the [phoneme, length, stress] triples the parser
+    // chip-produced on the C64 (there the phoneme, length and stress tables
+    // were flat parallel arrays; every consumer below re-indexes them the
+    // same way we index tuples here, so no tuple buffer is needed).
     var tuples = [];
     while (1) {
         var A = phonemes[srcpos];
@@ -2363,7 +2385,10 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
                     // is the count non-zero and the sampled flag is zero?
                     if ((mem38 !== 0) || (flags === 0)) {
                         // reset the phase of the formants to match the pulse
-                        // TODO: we should have a switch to disable this, it causes a pretty nice voice without the masking!
+                        // ("masking": the phase restarts at every glottal pulse, which
+                        //  is what gives SAM its characteristic buzzy timbre.
+                        //  `masking: false` keeps the formant generators running without
+                        //  the pulse re-sync, for a smoother voice.)
                         phase1 = phase1 + frequency[0][pos]; // & 0xFF;
                         phase2 = phase2 + frequency[1][pos]; // & 0xFF;
                         phase3 = phase3 + frequency[2][pos]; // & 0xFF;
@@ -2379,9 +2404,11 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
             mem38 = glottal_pulse * .75 | 0;
             // reset the formant wave generators to keep them in
             // sync with the glottal pulse
-            phase1 = 0;
-            phase2 = 0;
-            phase3 = 0;
+            if (masking) {
+                phase1 = 0;
+                phase2 = 0;
+                phase3 = 0;
+            }
         }
     }
 }
@@ -2451,6 +2478,10 @@ function SamBuffer16(input, options) {
  * @param {Number}  [options.mouth]    Default 128.
  * @param {Number}  [options.throat]   Default 128.
  * @param {Boolean} [options.hq]       High-precision render path. Default false.
+ * @param {Boolean} [options.masking]  Re-sync the formant generators to every glottal pulse
+ *                                     (the authentic C64-phase "masking" that gives SAM its
+ *                                     characteristic buzzy timbre). Disable for a smoother,
+ *                                     sine-composite voice. Default true.
  *
  * @return {Uint8Array|Boolean}
  */
@@ -2461,7 +2492,7 @@ function SamProcess(input, options) {
     if (false === parsed) {
         return false;
     }
-    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
+    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking);
 }
 
 /**
@@ -3017,14 +3048,24 @@ var rules2$1 = '(A)=|' +
     '(@)= AE6T|' +
     '(^)= KAE4RIXT';
 
-var FLAG_NUMERIC = 0x01;
-var FLAG_RULESET2 = 0x02;
-var FLAG_VOICED = 0x04; // FIXME: is this correct?
-var FLAG_0X08 = 0x08; // unknown.
-var FLAG_DIPTHONG = 0x10; // FIXME: is this correct?
-var FLAG_CONSONANT = 0x20; // FIXME: is this correct?
-var FLAG_VOWEL_OR_Y = 0x40;
-var FLAG_ALPHA_OR_QUOT = 0x80;
+// Character-classification bits of the reciter's character flag table
+// (tab36376 in the original address space). The bit values are verified
+// against the rule-condition checks in the 6502 reciter code, which AND
+// table entries against these bits to test the text around a rule match
+// (vowel-or-Y 0x40 pos36910, voiced 0x08 pos36920, sibilant 0x10 pos36935,
+// yod-dropping 0x04 pos36967, consonant 0x20 pos37004).
+var FLAG_NUMERIC = 0x01; // digits: matched by the '.' handling at pos36579 ('4.2', ...)
+var FLAG_RULESET2 = 0x02; // punctuation routed to the rules2 table at pos36607
+var FLAG_YOD_DROPPING = 0x04; // D, G, J, L, N, R, S, T, Z ('@' condition): the letters
+// before which orthographic U/EW is read /u:/ without a /j/
+// glide (cf. rules @(U), @(EW), @(UR)#)
+var FLAG_VOICED = 0x08; // voiced consonants: B, D, G, J, L, M, N, R, V, W, Z
+// ('.' condition; drives e.g. .E(D) -> D, .(S) -> Z)
+var FLAG_SIBILANT = 0x10; // sibilant-forming letters: C, S, X ('&' condition; the
+// CH/SH digraphs are checked by the caller besides this flag)
+var FLAG_CONSONANT = 0x20; // consonants ('^' condition)
+var FLAG_VOWEL_OR_Y = 0x40; // vowels and 'Y' ('#' condition)
+var FLAG_ALPHA_OR_QUOT = 0x80; // alphabet characters and the quotation mark
 
 /**
  * Test if the char matches against the flags in the reciter table.
@@ -3089,20 +3130,29 @@ function reciterRule(ruleString) {
                     ' ': function () { return !flagsAt(text, --pos, FLAG_ALPHA_OR_QUOT); },
                     // '#' - previous char must be a vowel or Y.
                     '#': function () { return flagsAt(text, --pos, FLAG_VOWEL_OR_Y); },
-                    // '.' - unknown?
-                    '.': function () { return flagsAt(text, --pos, FLAG_0X08); },
-                    // '&' - previous char must be a dipthong or previous chars must be 'CH' or 'SH'
-                    '&': function () { return (flagsAt(text, --pos, FLAG_DIPTHONG)) || (isOneOf(text.substr(--pos, 2), ['CH', 'SH'])); },
-                    // '@' - previous char must be voiced and not 'H'.
+                    // '.' - previous char must be a voiced consonant (B, D, G, J, L, M,
+                    //      N, R, V, W, Z; drives e.g. .E(D) -> D and .(S) -> Z).
+                    '.': function () { return flagsAt(text, --pos, FLAG_VOICED); },
+                    // '&' - previous char must be a sibilant letter (C, S or X) or the
+                    //      previous chars must be 'CH' or 'SH'.
+                    '&': function () { return (flagsAt(text, --pos, FLAG_SIBILANT)) || (isOneOf(text.substr(--pos, 2), ['CH', 'SH'])); },
+                    // '@' - previous char must be one of the yod-dropping consonants
+                    //      D, G, J, L, N, R, S, T, Z: the letters before which the
+                    //      orthographic 'U'/'EW' is read /u:/ without a /j/ glide
+                    //      (cf. the rules @(U), @(EW), @(UR)#).
                     '@': function () {
-                        if (flagsAt(text, --pos, FLAG_VOICED)) {
+                        if (flagsAt(text, --pos, FLAG_YOD_DROPPING)) {
                             return true;
                         }
-                        // Not voiced, so the rule cannot match. Note: the original 6510
-                        // code contained a second check of the same character against
-                        // 'H' and then 'T', 'C', 'S' here, which was unreachable dead
-                        // code (see the FIXME in the original reciter.c); it always
-                        // returned false. That is all that is left to do here.
+                        // Not in the yod-dropping set, so the rule cannot match. The
+                        // original 6510 code contained a second check of the same
+                        // character here which was unreachable dead code (see the
+                        // FIXME in the original reciter.c); the corresponding C port
+                        // reads: "A = inputtemp[X]; if (A != 72) goto pos36700;
+                        // if ((A != 84) && (A != 67) && (A != 83)) goto pos36700;" i.e.
+                        // A==72 ('H') can never simultaneously differ from 'T', 'C' and
+                        // 'S'. It always returned false. That is all that is left to do
+                        // here.
                         return false;
                     },
                     // '^' - previous char must be a consonant.
@@ -3146,19 +3196,25 @@ function reciterRule(ruleString) {
                     ' ': function () { return !flagsAt(text, ++pos, FLAG_ALPHA_OR_QUOT); },
                     // '#' - next char must be a vowel or Y.
                     '#': function () { return flagsAt(text, ++pos, FLAG_VOWEL_OR_Y); },
-                    // '.' - unknown?
-                    '.': function () { return flagsAt(text, ++pos, FLAG_0X08); },
-                    // '&' - next char must be a dipthong or next chars must be 'HC' or 'HS'
-                    '&': function () { return flagsAt(text, ++pos, FLAG_DIPTHONG) || isOneOf(text.substr((++pos) - 2, 2), ['HC', 'HS']); },
-                    // '@' - next char must be voiced and not 'H'.
+                    // '.' - next char must be a voiced consonant (B, D, G, J, L, M, N,
+                    //      R, V, W, Z; drives e.g. .E(D) -> D and .(S) -> Z).
+                    '.': function () { return flagsAt(text, ++pos, FLAG_VOICED); },
+                    // '&' - next char must be a sibilant letter (C, S or X) or the
+                    //      next chars must be 'HC' or 'HS' (i.e. 'CH'/'SH' seen from
+                    //      the match position).
+                    '&': function () { return flagsAt(text, ++pos, FLAG_SIBILANT) || isOneOf(text.substr((++pos) - 2, 2), ['HC', 'HS']); },
+                    // '@' - next char must be one of the yod-dropping consonants
+                    //      D, G, J, L, N, R, S, T, Z: the letters before which the
+                    //      orthographic 'U'/'EW' is read /u:/ without a /j/ glide
+                    //      (cf. the rules @(U), @(EW), @(UR)#).
                     '@': function () {
-                        if (flagsAt(text, ++pos, FLAG_VOICED)) {
+                        if (flagsAt(text, ++pos, FLAG_YOD_DROPPING)) {
                             return true;
                         }
-                        // Not voiced, so the rule cannot match. Note: the original 6510
-                        // code contained a second check of the same character against
-                        // 'H' and 'T', 'C', 'S' here, which was unreachable dead code
-                        // (bug in the original code, see reciter.c:489 / pos37367);
+                        // Not in the yod-dropping set, so the rule cannot match. Note:
+                        // the original 6510 code contained a second check of the same
+                        // character against 'H' and 'T', 'C', 'S' here, which was
+                        // unreachable dead code (bug in the original code, see reciter.c:489 / pos37367);
                         // it always returned false. That is all that is left to do here.
                         return false;
                     },
@@ -3335,7 +3391,7 @@ function TextToPhonemes(input) {
  * callers get it here at runtime.
  */
 var ALLOWED_KEYS = [
-    'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq' ];
+    'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq', 'masking' ];
 /**
  * Reject any option key the engine does not understand, so plain
  * JavaScript callers get the same protection the TypeScript consumers

@@ -106,7 +106,8 @@ export default function Parser1(input, addPhoneme, addStress) {
     }
 
     // Should be a stress character. Search through the stress table backwards.
-    match = StressTable.length;
+    // Start at the last table entry: stress values are stored low to high.
+    match = StressTable.length - 1;
     while ((sign1 !== StressTable[match]) && (match > 0)) {
       --match;
     }

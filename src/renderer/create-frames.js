@@ -22,8 +22,12 @@ function AddInflection (inflection, pos, pitches) {
   }
 
   let A;
-  // FIXME: Explain this fix better, it's not obvious
-  // ML : A =, fixes a problem with invalid pitch with '.'
+  // Skip frames with pitch 127. Without this, the inflection ramp below
+  // starts from such a frame and produces garbage pitch when the base pitch
+  // (byte) plus stress offset happens to wrap to exactly 127; e.g. with
+  // pitch setting 121, every stressed frame (offset +6) lands on 127 and
+  // the ramp above the frames ran away from the byte range. The C64
+  // disassembly does the same scan (Lbd03: advance while pitches[X]==$7f).
   while ((A = pitches[pos]) === 127) {
     ++pos;
   }

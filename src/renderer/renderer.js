@@ -17,16 +17,19 @@ import CreateOutputBuffer from './output-buffer.js';
  * @param {Number} [speed]
  * @param {Boolean} [singmode]
  * @param {Boolean} [hq]
+ * @param {Boolean} [masking] Re-sync the formant generators to every glottal
+ *                             pulse (the authentic behavior). Default true.
  *
  * @return Uint8Array
  */
-export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
+export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) {
   pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
   mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
   throat = (throat === undefined) ? 128 : throat & 0xFF;
   speed = (speed || 72) & 0xFF;
   singmode = singmode || false;
   hq = hq === true;
+  masking = masking === false ? false : true;
 
   // Every frame is 20ms long.
   const Output = CreateOutputBuffer(
@@ -39,7 +42,10 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
 
   // Main render loop.
   let srcpos  = 0; // Position in source
-  // FIXME: should be tuple buffer as well.
+  // The tuples here are the [phoneme, length, stress] triples the parser
+  // chip-produced on the C64 (there the phoneme, length and stress tables
+  // were flat parallel arrays; every consumer below re-indexes them the
+  // same way we index tuples here, so no tuple buffer is needed).
   let tuples = [];
   while(1) {
     const A = phonemes[srcpos];
@@ -302,7 +308,10 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
           // is the count non-zero and the sampled flag is zero?
           if((mem38 !== 0) || (flags === 0)) {
             // reset the phase of the formants to match the pulse
-            // TODO: we should have a switch to disable this, it causes a pretty nice voice without the masking!
+            // ("masking": the phase restarts at every glottal pulse, which
+            //  is what gives SAM its characteristic buzzy timbre.
+            //  `masking: false` keeps the formant generators running without
+            //  the pulse re-sync, for a smoother voice.)
             phase1 = phase1 + frequency[0][pos]; // & 0xFF;
             phase2 = phase2 + frequency[1][pos]; // & 0xFF;
             phase3 = phase3 + frequency[2][pos]; // & 0xFF;
@@ -321,9 +330,11 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
 
       // reset the formant wave generators to keep them in
       // sync with the glottal pulse
-      phase1 = 0;
-      phase2 = 0;
-      phase3 = 0;
+      if (masking) {
+        phase1 = 0;
+        phase2 = 0;
+        phase3 = 0;
+      }
     }
   }
 }

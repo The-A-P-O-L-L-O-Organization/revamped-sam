@@ -36,7 +36,8 @@ Improvements of the fork lineage on top of the plain library:
 - Per-call option overrides for pitch/speed/mouth/throat and friends;
 - An optional `hq` high-precision render path for a smoother voice,
   alongside the bit-exact authentic C64 render (both are pinned by golden
-  fixtures);
+  fixtures), and a `masking` switch to disable the glottal-pulse phase
+  re-sync for an even smoother voice without losing the render timing;
 - The Reciter knows some modern vocabulary now (AI, AGI, ASI, ANI, API,
   CPU, GPU, USB, HTTP(S), HTML, CSS, PDF, MP3, OS, TTS, JS, JSON, OCR,
   QR, WiFi), which the original 1982 rule set rendered as bogus English
@@ -110,6 +111,7 @@ Options accepted by the constructor:
 | `throat`   | `128`   | Throat formant (0-255).             |
 | `bits`     | `8`     | Container precision of `.wav` output for `download()`/`toWav()`: `8` (the authentic format) or `16` — a lossless container upgrade, every 8-bit sample is represented exactly. |
 | `hq`       | `false` | High-precision render path: keeps the full sine amplitude instead of quantizing it to the level steps of the C64 simulation, and rounds and clamps the formant mix instead of letting it wrap around. Identical render timing, but a smoother and less crunchy voice than the authentic classic render. |
+| `masking`  | `true`  | Glottal-pulse masking: re-syncs the phase of the formant generators to every glottal pulse, exactly as the original 6502 renderer does — the mechanism behind SAM's characteristic buzzy timbre. Disable for a smoother, more natural voice; identical render timing either way. |
 
 ## Development
 

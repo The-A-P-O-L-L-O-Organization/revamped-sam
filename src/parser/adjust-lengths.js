@@ -116,7 +116,11 @@ export default function AdjustLengths(getPhoneme, setLength, getLength) {
         continue;
       }
       // Got here if not <VOWEL>
-      // FIXME: the case when phoneme === END is taken over by !phonemeHasFlag(phoneme, FLAG_CONSONANT)
+      // Note: phoneme came from the loop header, so it is never END here
+      // (END exits the while); the next-position phoneme re-fetched above
+      // CAN be END, but it always leaves through the "not a consonant"
+      // branch. The ternary below is therefore defensive only (mirroring
+      // the mem56 = 65 substitution the C port makes for the end marker).
       let flags = (phoneme === END) ? (FLAG_CONSONANT | FLAG_UNVOICED_STOPCONS) : phonemeFlags[phoneme];
       // Unvoiced
       if (!matchesBitmask(flags, FLAG_VOICED)) {

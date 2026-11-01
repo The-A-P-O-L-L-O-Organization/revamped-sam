@@ -147,8 +147,9 @@ function Parser1(input, {phonemeindex, stress}) {
       phonemeindex[position++] = match;
     } else {
       // Should be a stress character. Search through the
-      // stress table backwards.
-      match = 8; // End of stress table. FIXME: Don't hardcode.
+      // stress table backwards, starting at the last table entry
+      // (stress values are stored low to high).
+      match = stressInputTable.length - 1;
       while ((sign1 !== stressInputTable[match]) && (match>0)){ --match; }
 
       if (match === 0) {
@@ -643,10 +644,14 @@ function AdjustLengths({phonemeindex, phonemeLength}) {
       while ((index = phonemeindex[++X]) === 0) { /* move past silence */ }
 
       if (index !== END && ((flags[index] & FLAG_STOPCONS) !== 0)) {
-        // FIXME, this looks wrong?
-        // RULE: <UNVOICED STOP CONSONANT> {optional silence} <STOP CONSONANT>
+        // (Rule heading inherited from the C port: despite the "<UNVOICED>"
+        // label below, this shortens ANY two adjacent stop consonants,
+        // voiced or unvoiced - FLAG_STOPCONS 0x0002 covers both; verified
+        // against sam.c pos48821ff, where the inner rule heading is simply
+        // mislabelled.)
+        // RULE: <STOP CONSONANT> {optional silence} <STOP CONSONANT>
         if (process.env.NODE_ENV === 'development') {
-          console.log(`${X} RULE: <UNVOICED STOP CONSONANT> {optional silence} <STOP CONSONANT> - shorten both to 1/2 + 1`);
+          console.log(`${X} RULE: <STOP CONSONANT> {optional silence} <STOP CONSONANT> - shorten both to 1/2 + 1`);
         }
         phonemeLength[X]         = (phonemeLength[X] >> 1) + 1;
         phonemeLength[loopIndex] = (phonemeLength[loopIndex] >> 1) + 1;
@@ -656,9 +661,12 @@ function AdjustLengths({phonemeindex, phonemeLength}) {
       //       Decrease <DIPTHONG> by 2
       index = phonemeindex[X-1]; // prior phoneme;
 
-      // FIXME: The debug code here breaks the rule.
-      // FIXME: changed with braces by CS, check if it is correct.
-      // prior phoneme a stop consonant>
+      // FIXME: The debug code here breaks the rule. -> resolved: verified against
+      // sam.c pos48821ff ("changed with braces by CS"): shortening the diphthong
+      // only when the prior phoneme is a stop consonant, then advancing, is
+      // exactly what the brace-translated C does; the debug prints sit inside
+      // the same branch there, so the rule is not broken.
+      // Prior phoneme a stop consonant>
       if((flags[index] & FLAG_STOPCONS) !== 0) {
         if (process.env.NODE_ENV === 'development') {
           console.log(`${X} PRE phoneme ${String.fromCharCode(signInputTable1[phonemeindex[X]], signInputTable2[phonemeindex[X]])} length ${phonemeLength[X]}`);

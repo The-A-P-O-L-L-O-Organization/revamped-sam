@@ -117,7 +117,14 @@ export default function Parser (input) {
   for (let i = 0;i<phonemeindex.length;i++) {
     if (phonemeindex[i] > 80) {
       phonemeindex[i] = END;
-      // FIXME: When will this ever be anything else than END?
+      // In the 6502 original this sweep runs after the parser and
+      // Code41240 etc. and truncates at the first out-of-range index: the
+      // fixed-size 60-entry table there can retain garbage values (81..255)
+      // beyond the phonemes, so anything > 80 that is not already the END
+      // marker is erased here. Our JS tables grow dynamically and every
+      // producer only writes values <= 80 (or END/BREAK), so the first
+      // out-of-range value found is always the terminating END itself;
+      // the loop still breaks at it just as in the original.
       break; // error: delete all behind it
     }
   }

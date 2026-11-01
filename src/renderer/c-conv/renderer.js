@@ -154,8 +154,12 @@ function CreateFrames (
     } else {
       pos -= 30;
     }
-    // FIXME: Explain this fix better, it's not obvious
-    // ML : A =, fixes a problem with invalid pitch with '.'
+    // Skip frames with pitch 127. Without this, the inflection ramp below
+    // starts from such a frame and produces garbage pitch when the base pitch
+    // (byte) plus stress offset happens to wrap to exactly 127; e.g. with
+    // pitch setting 121, every stressed frame (offset +6) lands on 127 and
+    // the ramp above the frames ran away from the byte range. The C64
+    // disassembly does the same scan (Lbd03: advance while pitches[X]==$7f).
     while (A.set(pitches[pos]).get() === 127) {
       ++pos;
     }
@@ -467,7 +471,9 @@ export default function Renderer(phonemeindex, phonemeLength, stress, pitch, mou
       Output.buffer[(Output.bufferpos / 50 | 0) + k] = (A & 15) * 16;
     }
   }
-  // TODO, check for free the memory, 10 seconds of output should be more than enough
+  // The 10-second buffer is allocated once up front, as in the C64/C
+  // original; no per-frame allocation happens below, so nothing ever needs
+  // to be freed while the render runs.
   Output.buffer = new Uint8Array(22050 * 10);
   Output.bufferpos = 0;
   Output.oldTimeTableIndex = 0;

@@ -614,7 +614,8 @@ function Parser1(input, addPhoneme, addStress) {
     }
 
     // Should be a stress character. Search through the stress table backwards.
-    match = StressTable.length;
+    // Start at the last table entry: stress values are stored low to high.
+    match = StressTable.length - 1;
     while ((sign1 !== StressTable[match]) && (match > 0)) {
       --match;
     }
@@ -958,7 +959,11 @@ function AdjustLengths(getPhoneme, setLength, getLength) {
         continue;
       }
       // Got here if not <VOWEL>
-      // FIXME: the case when phoneme === END is taken over by !phonemeHasFlag(phoneme, FLAG_CONSONANT)
+      // Note: phoneme came from the loop header, so it is never END here
+      // (END exits the while); the next-position phoneme re-fetched above
+      // CAN be END, but it always leaves through the "not a consonant"
+      // branch. The ternary below is therefore defensive only (mirroring
+      // the mem56 = 65 substitution the C port makes for the end marker).
       var flags = (phoneme === END) ? (FLAG_CONSONANT | FLAG_UNVOICED_STOPCONS) : phonemeFlags[phoneme];
       // Unvoiced
       if (!matchesBitmask(flags, FLAG_VOICED)) {
@@ -1248,7 +1253,14 @@ function Parser (input) {
   for (var i = 0;i<phonemeindex.length;i++) {
     if (phonemeindex[i] > 80) {
       phonemeindex[i] = END;
-      // FIXME: When will this ever be anything else than END?
+      // In the 6502 original this sweep runs after the parser and
+      // Code41240 etc. and truncates at the first out-of-range index: the
+      // fixed-size 60-entry table there can retain garbage values (81..255)
+      // beyond the phonemes, so anything > 80 that is not already the END
+      // marker is erased here. Our JS tables grow dynamically and every
+      // producer only writes values <= 80 (or END/BREAK), so the first
+      // out-of-range value found is always the terminating END itself;
+      // the loop still breaks at it just as in the original.
       break; // error: delete all behind it
     }
   }
@@ -1957,8 +1969,12 @@ function AddInflection (inflection, pos, pitches) {
   }
 
   var A;
-  // FIXME: Explain this fix better, it's not obvious
-  // ML : A =, fixes a problem with invalid pitch with '.'
+  // Skip frames with pitch 127. Without this, the inflection ramp below
+  // starts from such a frame and produces garbage pitch when the base pitch
+  // (byte) plus stress offset happens to wrap to exactly 127; e.g. with
+  // pitch setting 121, every stressed frame (offset +6) lands on 127 and
+  // the ramp above the frames ran away from the byte range. The C64
+  // disassembly does the same scan (Lbd03: advance while pitches[X]==$7f).
   while ((A = pitches[pos]) === 127) {
     ++pos;
   }
@@ -2083,16 +2099,19 @@ function CreateOutputBuffer(buffersize) {
  * @param {Number} [speed]
  * @param {Boolean} [singmode]
  * @param {Boolean} [hq]
+ * @param {Boolean} [masking] Re-sync the formant generators to every glottal
+ *                             pulse (the authentic behavior). Default true.
  *
  * @return Uint8Array
  */
-function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
+function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) {
   pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
   mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
   throat = (throat === undefined) ? 128 : throat & 0xFF;
   speed = (speed || 72) & 0xFF;
   singmode = singmode || false;
   hq = hq === true;
+  masking = masking === false ? false : true;
 
   // Every frame is 20ms long.
   var Output = CreateOutputBuffer(
@@ -2105,7 +2124,10 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
 
   // Main render loop.
   var srcpos  = 0; // Position in source
-  // FIXME: should be tuple buffer as well.
+  // The tuples here are the [phoneme, length, stress] triples the parser
+  // chip-produced on the C64 (there the phoneme, length and stress tables
+  // were flat parallel arrays; every consumer below re-indexes them the
+  // same way we index tuples here, so no tuple buffer is needed).
   var tuples = [];
   while(1) {
     var A = phonemes[srcpos];
@@ -2352,7 +2374,10 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
           // is the count non-zero and the sampled flag is zero?
           if((mem38 !== 0) || (flags === 0)) {
             // reset the phase of the formants to match the pulse
-            // TODO: we should have a switch to disable this, it causes a pretty nice voice without the masking!
+            // ("masking": the phase restarts at every glottal pulse, which
+            //  is what gives SAM its characteristic buzzy timbre.
+            //  `masking: false` keeps the formant generators running without
+            //  the pulse re-sync, for a smoother voice.)
             phase1 = phase1 + frequency[0][pos]; // & 0xFF;
             phase2 = phase2 + frequency[1][pos]; // & 0xFF;
             phase3 = phase3 + frequency[2][pos]; // & 0xFF;
@@ -2371,9 +2396,11 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq) {
 
       // reset the formant wave generators to keep them in
       // sync with the glottal pulse
-      phase1 = 0;
-      phase2 = 0;
-      phase3 = 0;
+      if (masking) {
+        phase1 = 0;
+        phase2 = 0;
+        phase3 = 0;
+      }
     }
   }
 }
@@ -2440,6 +2467,10 @@ function SamBuffer (input, options) {
  * @param {Number}  [options.mouth]    Default 128.
  * @param {Number}  [options.throat]   Default 128.
  * @param {Boolean} [options.hq]       High-precision render path. Default false.
+ * @param {Boolean} [options.masking]  Re-sync the formant generators to every glottal pulse
+ *                                     (the authentic C64-phase "masking" that gives SAM its
+ *                                     characteristic buzzy timbre). Disable for a smoother,
+ *                                     sine-composite voice. Default true.
  *
  * @return {Uint8Array|Boolean}
  */
@@ -2451,7 +2482,7 @@ function SamProcess (input, options) {
     return false;
   }
 
-  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
+  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking);
 }
 
 var lookup_ones = ["WAHN", "TUW5", "THRIY5", "FOHR5", "FAY5V", "SIH5KS", "SEH5VUN", "EY5T", "NAY5N"];

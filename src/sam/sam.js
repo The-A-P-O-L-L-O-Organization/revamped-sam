@@ -98,6 +98,10 @@ export function SamBuffer16 (input, options) {
  * @param {Number}  [options.mouth]    Default 128.
  * @param {Number}  [options.throat]   Default 128.
  * @param {Boolean} [options.hq]       High-precision render path. Default false.
+ * @param {Boolean} [options.masking]  Re-sync the formant generators to every glottal pulse
+ *                                     (the authentic C64-phase "masking" that gives SAM its
+ *                                     characteristic buzzy timbre). Disable for a smoother,
+ *                                     sine-composite voice. Default true.
  *
  * @return {Uint8Array|Boolean}
  */
@@ -107,5 +111,5 @@ export function SamProcess (input, options = {}) {
     return false;
   }
 
-  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq);
+  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking);
 }
