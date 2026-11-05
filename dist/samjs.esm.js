@@ -2601,6 +2601,14 @@ var rules$1 =
     ' (OCR) =OHSIYAAR4|' +
     ' (QR) =KEYAAR4|' +
     ' (WIFI) =WAY4FAY4|' +
+    // English pronunciation exceptions the classic rule set gets wrong:
+    // "ti" is read as /tih/ before -al (TIH-D-UL) instead of /tai/, and the
+    // "ea" of "-ea-ther" is read /iy/ instead of /eh/ (WIY5-DHER). Targets
+    // follow the sibling family spellings the classic rules produce
+    // (TIDY -> TAYDIY, BROTHER -> BRAH5DHER) with the modern-vocabulary
+    // stress convention (4 for the stressed vowel of a whole word).
+    ' (TIDAL) =TAY4DUL|' +
+    ' (WEATHER) =WEH5DHER|' +
     ' (A.)=EH4Y. |' +
     '(A) =AH|' +
     ' (ARE) =AAR|' +

@@ -36,7 +36,10 @@ const extractList = (source, from) => {
   return source.slice(from, to)
     .split('\n')
     .map((line) => line.trim().replace(/,$/, ''))
-    .filter((line) => line.startsWith("'"))
+    // Both quote styles occur: the original hand-maintained table used
+    // single quotes, but the generated output below serializes every
+    // entry with JSON.stringify (double quotes).
+    .filter((line) => line.startsWith("'") || line.startsWith('"'))
     .map(parseJsString);
 };
 
@@ -46,6 +49,11 @@ const extractList = (source, from) => {
  */
 const parseJsString = (literal) => {
   let result = '';
+  // The terminator is the closing quote of the literal's own style: the
+  // hand-maintained table used single quotes (with \' escapes), the
+  // generated output uses JSON.stringify (double quotes, with \"
+  // escapes); an apostrophe inside a double-quoted entry is plain data.
+  const quote = literal[0];
   for (let pos = 1; pos < literal.length; pos++) {
     const char = literal[pos];
     if (char === '\\') {
@@ -53,7 +61,7 @@ const parseJsString = (literal) => {
       result += literal[pos];
       continue;
     }
-    if (char === "'") {
+    if (char === quote) {
       break;
     }
     result += char;

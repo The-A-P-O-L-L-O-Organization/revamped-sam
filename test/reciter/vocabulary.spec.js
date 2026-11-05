@@ -26,6 +26,11 @@ const VOCABULARY = [
   ['OCR', 'OHSIYAAR4'],
   ['QR', 'KEYAAR4'],
   ['WIFI', 'WAY4FAY4'],
+  // English pronunciation exceptions (whole-word rules against the
+  // classic rule set's misreadings: "tid-al" as TIH-D-UL, "w-eather"
+  // as WIY5-DHER).
+  ['TIDAL', 'TAY4DUL'],
+  ['WEATHER', 'WEH5DHER'],
 ];
 
 describe('Reciter: modern vocabulary', () => {
@@ -66,5 +71,12 @@ describe('Reciter: modern vocabulary', () => {
     assert.strictEqual(SamJs.convert('OSLO'), ' AASLOW');
     assert.strictEqual(SamJs.convert('APIX'), ' AEPIHKS');
     assert.strictEqual(SamJs.convert('POSS'), ' PAO5S');
+    // The weather/tidal exceptions must only fire as whole words;
+    // compounds and inflections keep the classic-ruleset rendering.
+    assert.strictEqual(SamJs.convert('INTERTIDAL'), ' IHNTERTIHDUL');
+    assert.strictEqual(SamJs.convert('CAROTIDAL'), ' KEH4RAATIHDUL');
+    assert.strictEqual(SamJs.convert('BELLWEATHER'), ' BEHLWIY5DHER');
+    assert.strictEqual(SamJs.convert('TIDALLY'), ' TIHDULIY');
+    assert.strictEqual(SamJs.convert('WEATHERS'), ' WIY5DHERZ');
   });
 });

@@ -41,7 +41,9 @@ Improvements of the fork lineage on top of the plain library:
 - The Reciter knows some modern vocabulary now (AI, AGI, ASI, ANI, API,
   CPU, GPU, USB, HTTP(S), HTML, CSS, PDF, MP3, OS, TTS, JS, JSON, OCR,
   QR, WiFi), which the original 1982 rule set rendered as bogus English
-  fragments;
+  fragments, plus whole-word English pronunciation exceptions for
+  tricky spellings (TIDAL = /ˈtaɪdəl/, not "tih-dul"; WEATHER =
+  /ˈwɛðər/, not "wee-ther") the classic rule set misreads;
 - A self-contained demo page (`index.html`), later reworked into the
   React demo app in [`web/`](web) that CI deploys to GitHub Pages. The
   app previews the recited phonemes and the waveform live, and the voice

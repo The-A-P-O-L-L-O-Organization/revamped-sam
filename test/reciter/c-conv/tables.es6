@@ -114,17 +114,18 @@ export const charFlags = new Uint8Array([
 
 
 
+
 export const tab37489 = new Uint8Array([
   0, 253, 95, 47, 204, 82, 147, 29,
   206, 45, 93, 116, 183, 44, 144, 10,
-  142, 194, 227, 203, 87, 249, 22, 2,
-  27, 174
+  142, 194, 227, 203, 104, 10, 39, 39,
+  64, 211
 ]);
 
 export const tab37515 = new Uint8Array([
   0, 1, 2, 3, 3, 5, 5, 6,
   6, 8, 8, 8, 8, 9, 9, 12,
-  12, 12, 12, 13, 15, 15, 16, 17,
+  12, 12, 12, 13, 15, 16, 16, 17,
   17, 17
 ]);
 
@@ -482,6 +483,7 @@ export const rules = encodePhonemeTable([
   "(STLE)=SUL",
   "(S)=S",
   "]T",
+  " (TIDAL) =TAY4DUL",
   " (TTS) =TIYTIYEH4S",
   " (T) =TIY4",
   " (THE) #=DHIY",
@@ -538,6 +540,7 @@ export const rules = encodePhonemeTable([
   "(VIEW)=VYUW5",
   "(V)=V",
   "]W",
+  " (WEATHER) =WEH5DHER",
   " (WIFI) =WAY4FAY4",
   " (W) =DAH4BULYUW",
   " (WERE)=WER",
