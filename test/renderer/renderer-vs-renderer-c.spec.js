@@ -55,7 +55,7 @@ describe('renderer vs renderer-c', () => {
       const parsed = Parser(test);
 
       const phonemeindex = new Uint8Array(256), phonemeLength = new Uint8Array(256), stress = new Uint8Array(256);
-      parsed.forEach((v, i) => {
+      parsed.phonemes.forEach((v, i) => {
         phonemeindex[i] = v[0];
         phonemeLength[i] = v[1];
         stress[i] = v[2];
@@ -67,7 +67,7 @@ describe('renderer vs renderer-c', () => {
         'RendererC did not succeed'
       );
       assert.notEqual(
-        Renderer(parsed),
+        Renderer(parsed.phonemes),
         false,
         'Renderer did not succeed'
       );

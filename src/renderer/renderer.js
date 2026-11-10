@@ -10,7 +10,7 @@ import CreateTransitions from './create-transitions.js';
 import CreateFrames from './create-frames.js';
 import CreateOutputBuffer from './output-buffer.js';
 import { normalizeMelody } from './notes.js';
-import { PHONEME_PERIOD, PHONEME_QUESTION } from '../parser/constants.js';
+import { PHONEME_PERIOD, PHONEME_QUESTION, PHONEME_COMMA, PHONEME_Q } from '../parser/constants.js';
 /**
  * @param {Array} phonemes
  * @param {Number} [pitch]
@@ -24,10 +24,17 @@ import { PHONEME_PERIOD, PHONEME_QUESTION } from '../parser/constants.js';
  * @param {String[]} [melody] One note per phoneme ('C4', 'F#3', 'Bb5',
  *                             or '-' for a rest), sung on the singing
  *                             path (no F1 pitch contour).
+ * @param {Number[]} [tokens] Optional parallel array mapping every tuple
+ *                            to the input phoneme token it came from
+ *                            (see parser.js). When present, melody notes
+ *                            attach once per input token, and tuples the
+ *                            parser split off (diphthong glides, plosive
+ *                            stop closures, Q) sing their source token's
+ *                            note.
  *
  * @return Uint8Array
  */
-export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking, melody) {
+export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking, melody, tokens) {
   pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
   mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
   throat = (throat === undefined) ? 128 : throat & 0xFF;
@@ -57,10 +64,18 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
   //
   // With a melody, a fourth slot is filled in: the note-derived pitch
   // byte the phoneme sings (undefined = keep the base pitch). The
-  // melody maps to phonemes in order; punctuation marks (period and
-  // question) are markers, not sung phonemes, so they do not consume
+  // melody maps to phonemes in order; punctuation marks (period, question
+  // and comma) are markers, not sung phonemes, so they do not consume
   // a melody entry.
+  //
+  // When a token map is available (see parser.js), one note attaches per
+  // input phoneme: tuples the parser split off a phoneme (diphthong
+  // glides like AY -> AY YX, plosive stop closures, Q) are continuations
+  // and sing the same note as the phoneme that produced them. Without
+  // the map, every tuple consumes a note (legacy behavior).
   let melodyIndex = 0;
+  let lastToken = null;
+  let currentNote;
   let tuples = [];
   while(1) {
     const A = phonemes[srcpos];
@@ -74,10 +89,16 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
         Render(tuples);
         tuples = [];
       } else {
-        if (melody !== undefined && A0 !== PHONEME_PERIOD && A0 !== PHONEME_QUESTION) {
-          const note = melody[melodyIndex++];
-          if (note !== undefined && note !== null) {
-            A[3] = note;
+        if (melody !== undefined && A0 !== PHONEME_PERIOD && A0 !== PHONEME_QUESTION && A0 !== PHONEME_COMMA) {
+          const token = (tokens === undefined) ? melodyIndex : tokens[srcpos];
+          // The parser-inserted glottal stop (Q) continues the note that is
+          // already sounding; it never consumes a melody entry of its own.
+          if (token !== lastToken && A0 !== PHONEME_Q) {
+            lastToken = token;
+            currentNote = melody[melodyIndex++];
+          }
+          if (currentNote !== undefined && currentNote !== null) {
+            A[3] = currentNote;
           }
         }
         tuples.push(A);

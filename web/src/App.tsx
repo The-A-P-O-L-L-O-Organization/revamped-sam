@@ -31,9 +31,12 @@ type ControlKey = (typeof CONTROLS)[number]['key']
 
 type Opts = Record<ControlKey, number>
 
-/** The classic SAM sing-along: "Daisy, Daisy, give me your answer, do." */
-const DEFAULT_SING_TEXT = 'D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5'
-const DEFAULT_MELODY = 'C4 C4 G4 G4 A4 A4 G4 G4 F4 F4 E4 E4 D4 D4 C4 C4'
+/** The homage: the full "Daisy Bell" chorus — the song the 1961 IBM 7094,
+ * the first computer to sing, sang (and HAL 9000 later sang dying). The
+ * stress digits are rhythm in classic mode; the default melody is the
+ * transcribed tune, one octave down in SAM's accurate pitch range. */
+const DEFAULT_SING_TEXT = 'D6 EH6 Y6 S6 IY6 , D6 EH6 Y6 S6 IY6 , G6 IH6 V6 M2 IY2 Y2 AO2 R2 AE2 N2 S4 ER4 D6 UW6 , AY6 M6 /H6 AE6 F6 K6 R6 EY6 Z6 IY6 , AO6 L6 F2 AO2 R2 DH2 AH2 L4 AH4 V4 AH2 V2 Y6 UW6 , IH2 T2 W2 OW2 N2 T2 B2 IY2 AH2 S4 T4 AY4 L2 IH2 SH2 M2 AE2 R2 IH7 J7 , AY2 K4 AE4 N4 T4 AH2 F2 AO4 R4 D4 AH2 K2 AE2 R2 IH7 J7 , B2 AH2 T2 Y2 UW2 L2 L4 UH4 K4 S6 W6 IY6 T6 AO4 N4 DH2 AH2 S4 IY4 T4 AH1 V1 AH1 B2 AY2 S2 IH2 K2 AH2 L2 B4 IH4 L4 T4 F2 AO2 R2 T8 UW8 ,'
+const DEFAULT_MELODY = 'D4 D4 D4 B3 B3 G3 G3 G3 D3 D3 E3 E3 E3 F#3 F#3 G3 G3 G3 E3 E3 G3 G3 D3 D3 A3 A3 D4 D4 D4 B3 B3 B3 G3 G3 E3 E3 F#3 F#3 F#3 G3 G3 A3 A3 A3 B3 B3 A3 A3 B3 B3 C4 C4 C4 C4 B3 B3 A3 D4 D4 D4 B3 B3 B3 A3 A3 A3 G3 G3 A3 B3 B3 B3 B3 G3 G3 E3 E3 E3 G3 E3 E3 E3 D3 D3 D3 D3 D3 G3 G3 G3 B3 B3 B3 A3 A3 A3 A3 G3 G3 B3 B3 A3 A3 A3 B3 B3 C4 D4 D4 B3 B3 G3 G3 G3 A3 A3 A3 A3 D3 D3 D3 G3 G3'
 
 const TABS = [
   { value: 'speak', label: 'Speak' },

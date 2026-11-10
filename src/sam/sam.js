@@ -115,5 +115,5 @@ export function SamProcess (input, options = {}) {
     return false;
   }
 
-  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking, options.melody);
+  return Renderer(parsed.phonemes, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking, options.melody, parsed.tokens);
 }

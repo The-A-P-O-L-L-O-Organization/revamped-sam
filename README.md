@@ -142,8 +142,12 @@ new SamJs().speak('D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5', {
 singing: an array with one note name per phoneme of the input, in
 order. Note names are concert pitch (`'C4'`, `'F#3'`, `'Bb5'`, A4 =
 440 Hz); `'-'` is a rest that keeps the base pitch for that phoneme.
-Punctuation marks (`.`, `,`) do not consume a note; extra notes are
-ignored, and phonemes beyond the melody keep the base pitch.
+Punctuation marks (`.`, `,`, `?`) and the parser-inserted glottal stop
+do not consume a note; extra notes are ignored, and phonemes beyond
+the melody keep the base pitch. One note covers everything the parser
+derives from a phoneme — the glide of a diphthong (`AY` → `AY YX`) and
+the closure frames of a plosive stop (`D` → `D` + 2 closures) sing the
+same note as the phoneme that produced them.
 
 ```js
 new SamJs().speak('D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5', {

@@ -58,12 +58,14 @@ export interface SamOptions {
   /**
    * Singing melody: one note per phoneme of the input, in order. Note
    * names like "C4", "F#3", "Bb5" (A4 = 440 Hz), or "-" to keep the
-   * base pitch for that phoneme. Punctuation does not consume a note;
-   * notes beyond the phoneme count are ignored and phonemes beyond the
-   * melody keep the base pitch. The render timing is unchanged. A
-   * melody switches the renderer to the singing path: the F1 pitch
-   * contour is not applied (like `singmode`), so the notes stay in
-   * tune. SAM's pitch granularity is the 8-bit glottal pulse period,
+   * base pitch for that phoneme. Punctuation and the parser-inserted
+   * glottal stop do not consume a note; one note covers everything the
+   * parser derives from a phoneme (diphthong glides, plosive stop
+   * closures), notes beyond the phoneme count are ignored and phonemes
+   * beyond the melody keep the base pitch. The render timing is
+   * unchanged. A melody switches the renderer to the singing path: the
+   * F1 pitch contour is not applied (like `singmode`), so the notes stay
+   * in tune. SAM's pitch granularity is the 8-bit glottal pulse period,
    * so notes in the higher octaves are quantized. Render timing is
    * unchanged for ordinary phonemes; the voiced sampled consonants
    * (V, Z, DH, ZH) render their sample inside the glottal pulse loop,

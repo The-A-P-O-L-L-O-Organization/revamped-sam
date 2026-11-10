@@ -4,6 +4,10 @@ export const pT    = 69;
 
 export const PHONEME_PERIOD = 1;
 export const PHONEME_QUESTION = 2;
+/** The comma pause the parser produces for ',' in phonetic input. */
+export const PHONEME_COMMA = 3;
+/** The glottal stop the parser inserts between stressed vowels. */
+export const PHONEME_Q = 31;
 
 /**
  * unknown: ' *', '.*', '?*', ',*', '-*'

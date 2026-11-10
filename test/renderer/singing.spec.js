@@ -41,6 +41,21 @@ describe('melody notes (per phoneme)', () => {
     assert.strictEqual(plain.length, sung.length);
   });
 
+  it('should map notes to the phonemes of the input, not the expanded tuples', () => {
+    // The parser splits diphthongs (AY -> AY YX) and prolongs plosive stop
+    // consonants (D -> D + 2 closures) into extra tuples, and inserts
+    // glottal stops. A note must attach once per input phoneme: one note
+    // covers the whole expanded group, extra notes are ignored beyond the
+    // input phoneme count.
+    const one = SamJs.buf8('AY', { phonetic: true, melody: ['C4'] });
+    const two = SamJs.buf8('AY', { phonetic: true, melody: ['C4', 'G4'] });
+    assert.isTrue(eq(one, two), 'the AY glide must sing the diphthong note');
+
+    const daa = SamJs.buf8('D AA', { phonetic: true, melody: ['C4', 'G3'] });
+    const daaExtra = SamJs.buf8('D AA', { phonetic: true, melody: ['C4', 'G3', 'E4', 'A4'] });
+    assert.isTrue(eq(daa, daaExtra), 'notes beyond the input phoneme count are ignored');
+  });
+
   it('should keep the authentic pitch-dependent sample length of V/Z/DH/ZH', () => {
     // The voiced sampled consonants produce their sample inside the
     // glottal pulse loop, so their rendered length depends on the pitch
@@ -115,6 +130,20 @@ describe('melody notes (per phoneme)', () => {
   it('should reject typo-ed option spellings', () => {
     assert.throws(() => SamJs.buf8('AA', { phonetic: true, Melody: ['C4'] }), /Unknown option "Melody"/);
   });
+
+  it('should not consume notes on punctuation', () => {
+    // Comma, period and question mark are phrase markers, not sung
+    // phonemes (the comma pause is phoneme 3 in the parser output).
+    const comma2 = SamJs.buf8('AA , AA', { phonetic: true, melody: ['G3', 'C4'] });
+    const comma3 = SamJs.buf8('AA , AA', { phonetic: true, melody: ['G3', 'C4', 'C4'] });
+    assert.isTrue(eq(comma2, comma3));
+    const period2 = SamJs.buf8('AA . AA', { phonetic: true, melody: ['G3', 'C4'] });
+    const period3 = SamJs.buf8('AA . AA', { phonetic: true, melody: ['G3', 'C4', 'C4'] });
+    assert.isTrue(eq(period2, period3));
+    const question2 = SamJs.buf8('AA ? AA', { phonetic: true, melody: ['G3', 'C4'] });
+    const question3 = SamJs.buf8('AA ? AA', { phonetic: true, melody: ['G3', 'C4', 'C4'] });
+    assert.isTrue(eq(question2, question3));
+  });
 });
 
 describe('note to pitch byte conversion', () => {
@@ -135,5 +164,35 @@ describe('note to pitch byte conversion', () => {
 
   it('should treat "-" as a rest', () => {
     assert.isNull(noteToPitchByte('-'));
+  });
+});
+
+describe('Daisy Bell homage', () => {
+  // The full chorus of "Daisy Bell" (Harry Dacre, 1892), transcribed from
+  // the mfiles.co.uk piano/vocal MIDI and transposed one octave down into
+  // SAM's accurate pitch range. Rendered end-to-end (conversion +
+  // rendering, not byte-golden) in homage to the 1961 IBM 7094 — the
+  // first computer to sing, which sang this song.
+  const PHONEMES = 'D6 EH6 Y6 S6 IY6 , D6 EH6 Y6 S6 IY6 , G6 IH6 V6 M2 IY2 Y2 AO2 R2 AE2 N2 S4 ER4 D6 UW6 , AY6 M6 /H6 AE6 F6 K6 R6 EY6 Z6 IY6 , AO6 L6 F2 AO2 R2 DH2 AH2 L4 AH4 V4 AH2 V2 Y6 UW6 , IH2 T2 W2 OW2 N2 T2 B2 IY2 AH2 S4 T4 AY4 L2 IH2 SH2 M2 AE2 R2 IH7 J7 , AY2 K4 AE4 N4 T4 AH2 F2 AO4 R4 D4 AH2 K2 AE2 R2 IH7 J7 , B2 AH2 T2 Y2 UW2 L2 L4 UH4 K4 S6 W6 IY6 T6 AO4 N4 DH2 AH2 S4 IY4 T4 AH1 V1 AH1 B2 AY2 S2 IH2 K2 AH2 L2 B4 IH4 L4 T4 F2 AO2 R2 T8 UW8 ,';
+  const MELODY = 'D4 D4 D4 B3 B3 G3 G3 G3 D3 D3 E3 E3 E3 F#3 F#3 G3 G3 G3 E3 E3 G3 G3 D3 D3 A3 A3 D4 D4 D4 B3 B3 B3 G3 G3 E3 E3 F#3 F#3 F#3 G3 G3 A3 A3 A3 B3 B3 A3 A3 B3 B3 C4 C4 C4 C4 B3 B3 A3 D4 D4 D4 B3 B3 B3 A3 A3 A3 G3 G3 A3 B3 B3 B3 B3 G3 G3 E3 E3 E3 G3 E3 E3 E3 D3 D3 D3 D3 D3 G3 G3 G3 B3 B3 B3 A3 A3 A3 A3 G3 G3 B3 B3 A3 A3 A3 B3 B3 C4 D4 D4 B3 B3 G3 G3 G3 A3 A3 A3 A3 D3 D3 D3 G3 G3'.split(' ');
+
+  it('should render the full chorus with the melody', () => {
+    const sung = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, melody: MELODY, speed: 50 });
+    assert.isFalse(sung === false);
+    assert.isAbove(sung.length, 100000);
+  });
+
+  it('should consume exactly one note per phoneme', () => {
+    const withMelody = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, melody: MELODY, speed: 50 });
+    const withExtra = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, melody: [...MELODY, 'A3', 'A3', 'A3', 'A3'], speed: 50 });
+    const withShort = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, melody: MELODY.slice(0, MELODY.length - 1), speed: 50 });
+    assert.isTrue(eq(withMelody, withExtra), 'extra notes are ignored');
+    assert.isFalse(eq(withMelody, withShort), 'the last note is sung by the last phoneme');
+  });
+
+  it('should differ from the same phrase without the melody', () => {
+    const sung = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, melody: MELODY, speed: 50 });
+    const spoken = SamJs.buf8(PHONEMES, { phonetic: true, singmode: true, speed: 50 });
+    assert.isFalse(eq(sung, spoken));
   });
 });

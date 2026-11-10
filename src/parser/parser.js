@@ -52,10 +52,15 @@ export default function Parser (input) {
       phonemeindex[i+1]  = phonemeindex[i];
       phonemeLength[i+1] = getLength(i);
       stress[i+1]        = getStress(i);
+      tokens[i+1]        = tokens[i];
     }
     phonemeindex[pos]  = value;
     phonemeLength[pos] = length | 0;
     stress[pos]        = stressValue;
+    // Every rewrite inserts directly behind the phoneme that produced the
+    // inserted tuple, so the new element inherits that source's token,
+    // which sits at pos - 1 after the shift above.
+    tokens[pos] = tokens[pos - 1] ?? 0;
   };
   const getStress = (pos) => stress[pos] | 0;
   const setStress = (pos, stressValue) => {
@@ -85,6 +90,15 @@ export default function Parser (input) {
   const stress = []; //numbers from 0 to 8
   const phonemeLength = [];
   const phonemeindex = [];
+  // Parallel array: for every final tuple, the index of the input phoneme
+  // token it came from. The rewrite passes (Parser2 diphthong glides and
+  // CH/J continuations, plosive-stop closures, Q) insert their tuples
+  // directly behind the phoneme that produced them, and insertPhoneme
+  // copies tokens[] along, so a continuation stays attached to the token
+  // that generated it. This lets callers (e.g. the melody renderer) treat
+  // "one note per input phoneme" instead of counting expanded tuples.
+  const tokens = [];
+  let tokenCount = 0;
 
   let pos = 0;
   Parser1(
@@ -92,6 +106,7 @@ export default function Parser (input) {
     (value) => {
       stress[pos] = 0;
       phonemeLength[pos] = 0;
+      tokens[pos] = tokenCount++;
       phonemeindex[pos++] = value;
     },
     (value) => {
@@ -135,7 +150,10 @@ export default function Parser (input) {
     PrintPhonemes(phonemeindex, phonemeLength, stress);
   }
 
-  return phonemeindex.map((v, i) => [v, phonemeLength[i] | 0, stress[i] | 0]);
+  return {
+    phonemes: phonemeindex.map((v, i) => [v, phonemeLength[i] | 0, stress[i] | 0]),
+    tokens,
+  };
 }
 
 /**
