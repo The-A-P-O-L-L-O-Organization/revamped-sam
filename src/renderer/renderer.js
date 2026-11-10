@@ -9,6 +9,8 @@ import SetMouthThroat from './set-mouth-throat.js'
 import CreateTransitions from './create-transitions.js';
 import CreateFrames from './create-frames.js';
 import CreateOutputBuffer from './output-buffer.js';
+import { normalizeMelody } from './notes.js';
+import { PHONEME_PERIOD, PHONEME_QUESTION } from '../parser/constants.js';
 /**
  * @param {Array} phonemes
  * @param {Number} [pitch]
@@ -19,10 +21,13 @@ import CreateOutputBuffer from './output-buffer.js';
  * @param {Boolean} [hq]
  * @param {Boolean} [masking] Re-sync the formant generators to every glottal
  *                             pulse (the authentic behavior). Default true.
+ * @param {String[]} [melody] One note per phoneme ('C4', 'F#3', 'Bb5',
+ *                             or '-' for a rest), sung on the singing
+ *                             path (no F1 pitch contour).
  *
  * @return Uint8Array
  */
-export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) {
+export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking, melody) {
   pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
   mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
   throat = (throat === undefined) ? 128 : throat & 0xFF;
@@ -30,6 +35,9 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
   singmode = singmode || false;
   hq = hq === true;
   masking = masking === false ? false : true;
+  // Validate and convert the melody up front (throws on invalid notes),
+  // before any rendering happens.
+  melody = normalizeMelody(melody);
 
   // Every frame is 20ms long.
   const Output = CreateOutputBuffer(
@@ -46,6 +54,13 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
   // chip-produced on the C64 (there the phoneme, length and stress tables
   // were flat parallel arrays; every consumer below re-indexes them the
   // same way we index tuples here, so no tuple buffer is needed).
+  //
+  // With a melody, a fourth slot is filled in: the note-derived pitch
+  // byte the phoneme sings (undefined = keep the base pitch). The
+  // melody maps to phonemes in order; punctuation marks (period and
+  // question) are markers, not sung phonemes, so they do not consume
+  // a melody entry.
+  let melodyIndex = 0;
   let tuples = [];
   while(1) {
     const A = phonemes[srcpos];
@@ -59,6 +74,12 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
         Render(tuples);
         tuples = [];
       } else {
+        if (melody !== undefined && A0 !== PHONEME_PERIOD && A0 !== PHONEME_QUESTION) {
+          const note = melody[melodyIndex++];
+          if (note !== undefined && note !== null) {
+            A[3] = note;
+          }
+        }
         tuples.push(A);
       }
     }
@@ -100,12 +121,15 @@ export default function Renderer(phonemes, pitch, mouth, throat, speed, singmode
       tuples
     );
 
-    if (!singmode) {
+    if (!singmode && melody === undefined) {
       /* ASSIGN PITCH CONTOUR
        *
        * This subtracts the F1 frequency from the pitch to create a
        * pitch contour. Without this, the output would be at a single
        * pitch level (monotone).
+       *
+       * Both singing paths skip this: `singmode` (the classic behavior)
+       * and any melody, whose notes would be detuned by the contour.
        */
       for(let i = 0; i < pitches.length; i++) {
         // subtract half the frequency of the formant 1.

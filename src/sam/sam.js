@@ -102,6 +102,10 @@ export function SamBuffer16 (input, options) {
  *                                     (the authentic C64-phase "masking" that gives SAM its
  *                                     characteristic buzzy timbre). Disable for a smoother,
  *                                     sine-composite voice. Default true.
+ * @param {String[]} [options.melody]  One note per phoneme ('C4', 'F#3',
+ *                                     'Bb5', or '-' for a rest) sung on
+ *                                     the singing path (no F1 pitch
+ *                                     contour, like singmode).
  *
  * @return {Uint8Array|Boolean}
  */
@@ -111,5 +115,5 @@ export function SamProcess (input, options = {}) {
     return false;
   }
 
-  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking);
+  return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking, options.melody);
 }

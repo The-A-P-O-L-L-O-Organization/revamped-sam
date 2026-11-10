@@ -2076,6 +2076,10 @@ function CreateFrames(pitch, tuples, frequencyData) {
         }
         // get the stress amount (more stress = higher pitch)
         var phase1 = stressPitch_tab47492[tuples[i][2]];
+        // melody override: when the tuple carries a note-derived pitch byte
+        // (see renderer.js), every frame of this phoneme renders at exactly
+        // that pitch instead of the base pitch + stress offset.
+        var melodyPitch = tuples[i][3];
         // get number of frames to write
         // copy from the source to the frames list
         for (var frames = tuples[i][1]; frames > 0; frames--) {
@@ -2086,7 +2090,7 @@ function CreateFrames(pitch, tuples, frequencyData) {
             amplitude[1][X] = (ampldata[phoneme] >> 8) & 0xFF; // F2 amplitude
             amplitude[2][X] = (ampldata[phoneme] >> 16) & 0xFF; // F3 amplitude
             sampledConsonantFlag[X] = sampledConsonantFlags[phoneme]; // phoneme data for sampled consonants
-            pitches[X] = (pitch + phase1) & 0xFF; // pitch
+            pitches[X] = (melodyPitch !== undefined ? melodyPitch : (pitch + phase1)) & 0xFF; // pitch
             X++;
         }
     }
@@ -2134,6 +2138,71 @@ function CreateOutputBuffer(buffersize) {
 }
 
 /**
+ * Melody support: note names to SAM pitch bytes.
+ *
+ * SAM's glottal pulse period is the pitch byte P of the current frame,
+ * and one pulse iteration advances the output by 162/50 samples (the
+ * C64 timetable advance, see output-buffer.js), so the fundamental
+ * frequency of a rendered frame is
+ *
+ *     F0 = 22050 / (P * 162/50) = 1102500 / (162 * P) Hz
+ *
+ * (verified empirically against sustained renders in
+ * test/renderer/singing.spec.js). Inverting that maps a note's
+ * frequency onto the 8-bit pulse period.
+ */
+var SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+var NOTE_RE = /^([A-G])([#Bb]?)([0-8])$/;
+/** The fundamental of pitch byte P: F0 = 1102500 / (162 * P) Hz. */
+var pitchByteToHz = function (byte) { return 1102500 / (162 * byte); };
+/**
+ * Convert a note name to the SAM pitch byte closest to its frequency.
+ *
+ * @param {String} note Note name like 'C4', 'F#3', 'Bb5' (A4 = 440 Hz),
+ *                      or '-' for a rest (keep the base pitch).
+ *
+ * @return {Number|null} The pitch byte (1-255), or null for a rest.
+ */
+function noteToPitchByte(note) {
+    if (note === '-') {
+        return null;
+    }
+    var match = NOTE_RE.exec(note.toUpperCase());
+    if (match === null) {
+        throw new Error("Invalid melody note " + (JSON.stringify(note)) + " " +
+            '(expected note names like C4, F#3, Bb5, or "-" for a rest).');
+    }
+    var semitone = SEMITONES[match[1]] + (match[2] === '#' ? 1 : match[2] === 'B' ? -1 : 0);
+    var midi = (Number(match[3]) + 1) * 12 + semitone;
+    var hz = 440 * Math.pow(2, (midi - 69) / 12);
+    return Math.min(255, Math.max(1, Math.round(pitchByteToHz(hz))));
+}
+/**
+ * Normalize and validate a melody option.
+ *
+ * @param {String[]|undefined} melody One note per phoneme, in order.
+ *
+ * @return {Array<Number>|undefined} Pitch bytes (or null rests), or
+ *                                   undefined when no melody was given.
+ */
+function normalizeMelody(melody) {
+    if (melody === undefined || melody === null) {
+        return undefined;
+    }
+    if (!Array.isArray(melody)) {
+        throw new Error('The melody option must be an array of note names.');
+    }
+    var bytes = melody.map(function (note) {
+        if (typeof note !== 'string') {
+            throw new Error("Invalid melody note " + (JSON.stringify(note)) + " " +
+                '(expected note names like C4, F#3, Bb5, or "-" for a rest).');
+        }
+        return noteToPitchByte(note);
+    });
+    return bytes.length > 0 ? bytes : undefined;
+}
+
+/**
  * @param {Array} phonemes
  * @param {Number} [pitch]
  * @param {Number} [mouth]
@@ -2143,10 +2212,13 @@ function CreateOutputBuffer(buffersize) {
  * @param {Boolean} [hq]
  * @param {Boolean} [masking] Re-sync the formant generators to every glottal
  *                             pulse (the authentic behavior). Default true.
+ * @param {String[]} [melody] One note per phoneme ('C4', 'F#3', 'Bb5',
+ *                             or '-' for a rest), sung on the singing
+ *                             path (no F1 pitch contour).
  *
  * @return Uint8Array
  */
-function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) {
+function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking, melody) {
     pitch = (pitch === undefined) ? 64 : pitch & 0xFF;
     mouth = (mouth === undefined) ? 128 : mouth & 0xFF;
     throat = (throat === undefined) ? 128 : throat & 0xFF;
@@ -2154,6 +2226,9 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) 
     singmode = singmode || false;
     hq = hq === true;
     masking = masking === false ? false : true;
+    // Validate and convert the melody up front (throws on invalid notes),
+    // before any rendering happens.
+    melody = normalizeMelody(melody);
     // Every frame is 20ms long.
     var Output = CreateOutputBuffer(441 // = (22050/50)
         * phonemes.reduce(function (pre, v) { return pre + (v[1] * 20); }, 0) / 50 // Combined phoneme length in ms.
@@ -2166,6 +2241,13 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) 
     // chip-produced on the C64 (there the phoneme, length and stress tables
     // were flat parallel arrays; every consumer below re-indexes them the
     // same way we index tuples here, so no tuple buffer is needed).
+    //
+    // With a melody, a fourth slot is filled in: the note-derived pitch
+    // byte the phoneme sings (undefined = keep the base pitch). The
+    // melody maps to phonemes in order; punctuation marks (period and
+    // question) are markers, not sung phonemes, so they do not consume
+    // a melody entry.
+    var melodyIndex = 0;
     var tuples = [];
     while (1) {
         var A = phonemes[srcpos];
@@ -2180,6 +2262,12 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) 
                 tuples = [];
             }
             else {
+                if (melody !== undefined && A0 !== PHONEME_PERIOD && A0 !== PHONEME_QUESTION) {
+                    var note = melody[melodyIndex++];
+                    if (note !== undefined && note !== null) {
+                        A[3] = note;
+                    }
+                }
                 tuples.push(A);
             }
         }
@@ -2212,12 +2300,15 @@ function Renderer(phonemes, pitch, mouth, throat, speed, singmode, hq, masking) 
         var amplitude = ref[2];
         var sampledConsonantFlag = ref[3];
         var t = CreateTransitions(pitches, frequency, amplitude, tuples);
-        if (!singmode) {
+        if (!singmode && melody === undefined) {
             /* ASSIGN PITCH CONTOUR
              *
              * This subtracts the F1 frequency from the pitch to create a
              * pitch contour. Without this, the output would be at a single
              * pitch level (monotone).
+             *
+             * Both singing paths skip this: `singmode` (the classic behavior)
+             * and any melody, whose notes would be detuned by the contour.
              */
             for (var i = 0; i < pitches.length; i++) {
                 // subtract half the frequency of the formant 1.
@@ -2482,6 +2573,10 @@ function SamBuffer16(input, options) {
  *                                     (the authentic C64-phase "masking" that gives SAM its
  *                                     characteristic buzzy timbre). Disable for a smoother,
  *                                     sine-composite voice. Default true.
+ * @param {String[]} [options.melody]  One note per phoneme ('C4', 'F#3',
+ *                                     'Bb5', or '-' for a rest) sung on
+ *                                     the singing path (no F1 pitch
+ *                                     contour, like singmode).
  *
  * @return {Uint8Array|Boolean}
  */
@@ -2492,7 +2587,7 @@ function SamProcess(input, options) {
     if (false === parsed) {
         return false;
     }
-    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking);
+    return Renderer(parsed, options.pitch, options.mouth, options.throat, options.speed, options.singmode, options.hq, options.masking, options.melody);
 }
 
 /**
@@ -3399,7 +3494,7 @@ function TextToPhonemes(input) {
  * callers get it here at runtime.
  */
 var ALLOWED_KEYS = [
-    'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq', 'masking' ];
+    'phonetic', 'singmode', 'debug', 'pitch', 'speed', 'mouth', 'throat', 'bits', 'hq', 'masking', 'melody' ];
 /**
  * Reject any option key the engine does not understand, so plain
  * JavaScript callers get the same protection the TypeScript consumers

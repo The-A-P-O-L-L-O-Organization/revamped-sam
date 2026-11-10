@@ -34,6 +34,9 @@ Improvements of the fork lineage on top of the plain library:
   built by an environment-agnostic wav writer with optional 16-bit PCM
   containers (`bits`) and a Node-friendly `toWav()` helper;
 - Per-call option overrides for pitch/speed/mouth/throat and friends;
+- Singing: the classic stress-digit `singmode` and a modern `melody`
+  option that assigns one concert-pitch note per phoneme (see
+  [Singing](#singing));
 - An optional `hq` high-precision render path for a smoother voice,
   alongside the bit-exact authentic C64 render (both are pinned by golden
   fixtures), and a `masking` switch to disable the glottal-pulse phase
@@ -105,7 +108,7 @@ Options accepted by the constructor:
 | Option     | Default | Meaning                             |
 |------------|---------|-------------------------------------|
 | `phonetic` | `false` | Assume phonetic input.              |
-| `singmode` | `false` | Singing mode (no pitch contour).    |
+| `singmode` | `false` | Singing mode: skips the F1 pitch contour, so the phoneme stress digits become pitch steps — the original SAM's singing mechanism (see [Singing](#singing)). |
 | `debug`    | `false` | Debug output.                       |
 | `pitch`    | `64`    | Voice pitch (0-255).                |
 | `speed`    | `72`    | Speaking speed (1-255).             |
@@ -114,6 +117,55 @@ Options accepted by the constructor:
 | `bits`     | `8`     | Container precision of `.wav` output for `download()`/`toWav()`: `8` (the authentic format) or `16` — a lossless container upgrade, every 8-bit sample is represented exactly. |
 | `hq`       | `false` | High-precision render path: keeps the full sine amplitude instead of quantizing it to the level steps of the C64 simulation, and rounds and clamps the formant mix instead of letting it wrap around. Identical render timing, but a smoother and less crunchy voice than the authentic classic render. |
 | `masking`  | `true`  | Glottal-pulse masking: re-syncs the phase of the formant generators to every glottal pulse, exactly as the original 6502 renderer does — the mechanism behind SAM's characteristic buzzy timbre. Disable for a smoother, more natural voice; identical render timing either way. |
+| `melody`   | —       | Singing melody: one note per phoneme (see [Singing](#singing)). |
+
+## Singing
+
+There are two ways to make SAM sing. Both skip the F1 pitch contour
+(the speech-mode contour would detune held notes), and both keep the
+render timing of their phoneme stream, with one authentic exception
+noted at the end of this section.
+
+**1. Classic stress-digit singing (`singmode: true`).** The original
+mechanism: with phonetic input, the digit after each phoneme
+(`1`–`8`) is a pitch step — at the default pitch 64 the steps span
+roughly 55–140 Hz. This is how the 1982 software sang its demos:
+
+```js
+new SamJs().speak('D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5', {
+  phonetic: true,
+  singmode: true,
+});
+```
+
+**2. Melody notes (`melody`).** A modern extension for real tuneful
+singing: an array with one note name per phoneme of the input, in
+order. Note names are concert pitch (`'C4'`, `'F#3'`, `'Bb5'`, A4 =
+440 Hz); `'-'` is a rest that keeps the base pitch for that phoneme.
+Punctuation marks (`.`, `,`) do not consume a note; extra notes are
+ignored, and phonemes beyond the melody keep the base pitch.
+
+```js
+new SamJs().speak('D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5', {
+  phonetic: true,
+  melody: 'C4 C4 G4 G4 A4 A4 G4 G4 F4 F4 E4 E4 D4 D4 C4 C4'.split(' '),
+});
+```
+
+SAM renders pitch through an 8-bit glottal pulse period, so notes are
+quantized to `F0 = 1102500 / (162 × pitch byte)` Hz — spot-on in the
+bass and tenor range (A3, C4, E4 are within a few cents) and a few
+percent off in the top octaves. Each note holds exactly while its
+phoneme renders; consonants glide into the next note through the
+formant transitions.
+
+One authentic SAM quirk carries over: the render timing is identical
+to the spoken render for ordinary phonemes, but the voiced sampled
+consonants (V, Z, DH, ZH) produce their sample inside the glottal
+pulse loop, so their rendered length genuinely depends on the pitch
+byte — a high note on a "V" renders a longer buzz. That is the
+original renderer's behavior, not a melody artifact (the classic
+stress-digit `singmode` has the same property).
 
 ## Development
 

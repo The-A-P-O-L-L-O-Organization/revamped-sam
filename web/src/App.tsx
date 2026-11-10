@@ -31,8 +31,31 @@ type ControlKey = (typeof CONTROLS)[number]['key']
 
 type Opts = Record<ControlKey, number>
 
+/** The classic SAM sing-along: "Daisy, Daisy, give me your answer, do." */
+const DEFAULT_SING_TEXT = 'D EH4 Y4 D EH4 Y5 G IH5 V M IY6 Y UW5 R AE8 N S ER D UW5'
+const DEFAULT_MELODY = 'C4 C4 G4 G4 A4 A4 G4 G4 F4 F4 E4 E4 D4 D4 C4 C4'
+
+const TABS = [
+  { value: 'speak', label: 'Speak' },
+  { value: 'sing', label: 'Sing' },
+] as const
+
+type Tab = (typeof TABS)[number]['value']
+
+type SingMode = 'classic' | 'melody'
+
 /** Lower the initial settings from URLSearchParams, if present. */
-function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolean; masking: boolean } {
+function initialSettings(): {
+  tab: Tab
+  text: string
+  singText: string
+  singMode: SingMode
+  melody: string
+  opts: Opts
+  bits: 8 | 16
+  hq: boolean
+  masking: boolean
+} {
   const params = new URLSearchParams(window.location.search)
   const clamp = (key: ControlKey, fallback: number) => {
     const raw = Number.parseInt(params.get(key) ?? '', 10)
@@ -43,7 +66,11 @@ function initialSettings(): { text: string; opts: Opts; bits: 8 | 16; hq: boolea
   }
   const bits = Number.parseInt(params.get('b') ?? '', 10)
   return {
+    tab: params.get('tab') === 'sing' ? 'sing' : 'speak',
     text: params.get('t') ?? 'Hello , I am Sam.',
+    singText: params.get('song') ?? DEFAULT_SING_TEXT,
+    singMode: params.get('sm') === 'm' ? 'melody' : 'classic',
+    melody: params.get('mel') ?? DEFAULT_MELODY,
     opts: {
       pitch: clamp('pitch', DEFAULT_OPTS.pitch),
       speed: clamp('speed', DEFAULT_OPTS.speed),
@@ -76,9 +103,31 @@ function orFallback<T>(produce: () => T | false, fallback: T | false): T | false
   }
 }
 
+/** Split a melody string into note names. */
+function parseMelody(melody: string): string[] {
+  return melody.trim().split(/[\s,]+/).filter(Boolean)
+}
+
+/** True when every note is a valid melody note name ('C4', 'F#3', 'Bb5'…). */
+function validMelody(notes: string[]): boolean {
+  return notes.every((note) => note === '-' || /^([A-G])([#b]?)([0-8])$/i.test(note))
+}
+
+/** Approximate phoneme count of phonetic input (punctuation does not count). */
+function phonemeCount(phonetic: string): number {
+  return phonetic
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0 && !/^[.,!?;:'"()-]+$/.test(token)).length
+}
+
 export default function App() {
   const initial = useMemo(() => initialSettings(), [])
+  const [tab, setTab] = useState<Tab>(initial.tab)
   const [text, setText] = useState(initial.text)
+  const [singText, setSingText] = useState(initial.singText)
+  const [singMode, setSingMode] = useState<SingMode>(initial.singMode)
+  const [melodyText, setMelodyText] = useState(initial.melody)
   const [opts, setOpts] = useState<Opts>(initial.opts)
   const [bits, setBits] = useState<8 | 16>(initial.bits)
   const [hq, setHq] = useState(initial.hq)
@@ -90,10 +139,23 @@ export default function App() {
 
   const sam = useMemo(() => new SamJs(opts), [opts])
 
+  const melodyNotes = useMemo(() => parseMelody(melodyText), [melodyText])
+  const melodyOk = useMemo(() => validMelody(melodyNotes), [melodyNotes])
+  const singPhonemes = useMemo(() => phonemeCount(singText), [singText])
+
+  const singOptions = useMemo(() => {
+    const base = { phonetic: true, singmode: true, hq, masking }
+    return singMode === 'melody' ? { ...base, melody: melodyNotes } : base
+  }, [singMode, melodyNotes, hq, masking])
+
   // Share the current settings through the URL (no history entries).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    params.set('tab', tab)
     params.set('t', text)
+    params.set('song', singText)
+    params.set('sm', singMode === 'melody' ? 'm' : 'c')
+    params.set('mel', melodyText)
     params.set('pitch', String(opts.pitch))
     params.set('speed', String(opts.speed))
     params.set('mouth', String(opts.mouth))
@@ -106,17 +168,20 @@ export default function App() {
       '',
       `${window.location.pathname}?${params}`
     )
-  }, [text, opts, bits, hq, masking])
+  }, [tab, text, singText, singMode, melodyText, opts, bits, hq, masking])
 
   // Phoneme preview, refreshed as the text settles.
   useEffect(() => {
+    if (tab !== 'speak') {
+      return
+    }
     const timer = window.setTimeout(() => {
       setPhonemes(SamJs.convert(text))
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [text])
+  }, [tab, text])
 
-  // Waveform preview, refreshed whenever text or voice settings change.
+  // Waveform preview, refreshed whenever the active inputs or settings change.
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const canvas = canvasRef.current
@@ -124,7 +189,10 @@ export default function App() {
       if (!canvas || !context) {
         return
       }
-      const samples = orFallback(() => sam.buf8(text, { hq, masking }), false)
+      const samples =
+        tab === 'sing'
+          ? orFallback(() => sam.buf8(singText, singOptions), false)
+          : orFallback(() => sam.buf8(text, { hq, masking }), false)
       context.clearRect(0, 0, canvas.width, canvas.height)
       if (samples === false || samples.length === 0) {
         return
@@ -170,7 +238,7 @@ export default function App() {
       context.stroke()
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [text, sam, hq, masking])
+  }, [tab, text, singText, singOptions, sam, hq, masking])
 
   useEffect(() => {
     if (!copied) {
@@ -183,9 +251,21 @@ export default function App() {
   async function speak() {
     setSpeaking(true)
     try {
-      await sam.speak(text, { hq, masking })
+      if (tab === 'sing') {
+        await sam.speak(singText, singOptions)
+      } else {
+        await sam.speak(text, { hq, masking })
+      }
     } finally {
       setSpeaking(false)
+    }
+  }
+
+  function download() {
+    if (tab === 'sing') {
+      sam.download(singText, { ...singOptions, bits }, fileNameOf(singText))
+    } else {
+      sam.download(text, { phonetic: false, bits, hq, masking }, fileNameOf(text))
     }
   }
 
@@ -197,6 +277,10 @@ export default function App() {
       // Clipboard permission denied — nothing to do here.
     }
   }
+
+  const input = tab === 'sing' ? singText : text
+  const inputEmpty = input.trim().length === 0
+  const melodyBroken = tab === 'sing' && singMode === 'melody' && !melodyOk
 
   return (
     <div className="flex min-h-screen flex-col bg-background px-4 py-8 text-foreground">
@@ -212,53 +296,205 @@ export default function App() {
           </p>
         </header>
 
+        <div className="flex justify-center gap-2" role="tablist" aria-label="Mode">
+          {TABS.map((entry) => (
+            <Button
+              key={entry.value}
+              variant={tab === entry.value ? 'default' : 'outline'}
+              role="tab"
+              aria-selected={tab === entry.value}
+              onClick={() => setTab(entry.value)}
+            >
+              {entry.label}
+            </Button>
+          ))}
+        </div>
+
+        {tab === 'sing' ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Singing synthesizer</CardTitle>
+              <CardDescription>
+                Sing SAM phonemes with stress digits (the{' '}
+                <code className="rounded bg-muted px-1">1</code>-
+                <code className="rounded bg-muted px-1">8</code> after each
+                phoneme are pitch steps), or assign one note per phoneme.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="singinput">Phonemes to sing</Label>
+                <Input
+                  id="singinput"
+                  value={singText}
+                  onChange={(event) => setSingText(event.target.value)}
+                  placeholder={DEFAULT_SING_TEXT}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <Label>Singing mode</Label>
+                <div className="flex gap-2" role="group" aria-label="Singing mode">
+                  {([
+                    { value: 'classic', label: 'Classic digits' },
+                    { value: 'melody', label: 'Melody notes' },
+                  ] as const).map((mode) => (
+                    <Button
+                      key={mode.value}
+                      variant={singMode === mode.value ? 'default' : 'outline'}
+                      size="sm"
+                      aria-pressed={singMode === mode.value}
+                      onClick={() => setSingMode(mode.value)}
+                    >
+                      {mode.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {singMode === 'melody' ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="singmelody">Melody (one note per phoneme)</Label>
+                  <Input
+                    id="singmelody"
+                    value={melodyText}
+                    onChange={(event) => setMelodyText(event.target.value)}
+                    placeholder={DEFAULT_MELODY}
+                    aria-invalid={!melodyOk}
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    {melodyBroken ? (
+                      <span className="text-destructive">
+                        Invalid note — use names like C4, F#3, Bb5, or &quot;-&quot; for a rest.
+                      </span>
+                    ) : (
+                      <>
+                        {`The phrase has ${singPhonemes} phoneme${singPhonemes === 1 ? '' : 's'};`}
+                        extra notes are ignored, missing ones keep the base pitch.
+                      </>
+                    )}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="grid gap-2">
+                <Label htmlFor="singwave">Waveform preview</Label>
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <canvas
+                    id="singwave"
+                    ref={canvasRef}
+                    width={760}
+                    height={120}
+                    className="h-24 w-full"
+                    aria-label="Preview of the wave the current settings produce"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  size="lg"
+                  aria-label="Preview the phonemes with singing synthesis"
+                  onClick={() => void speak()}
+                  disabled={speaking || inputEmpty || melodyBroken}
+                >
+                  {speaking ? 'Singing…' : 'Preview'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="flex-1"
+                  aria-label="Download the rendered singing as a .wav file"
+                  onClick={download}
+                  disabled={inputEmpty || melodyBroken}
+                >
+                  Download .wav
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Speech synthesizer</CardTitle>
+              <CardDescription>
+                Enter plain English (or SAM phonemes like{' '}
+                <code className="rounded bg-muted px-1">/HEHLOW</code>).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="speechinput">Text to speak</Label>
+                <Input
+                  id="speechinput"
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="Hello , I am Sam."
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="speechwave">Waveform preview</Label>
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <canvas
+                    id="speechwave"
+                    ref={canvasRef}
+                    width={760}
+                    height={120}
+                    className="h-24 w-full"
+                    aria-label="Preview of the wave the current settings produce"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label
+                  htmlFor="speechphonemes"
+                >{`Phonemes via Reciter${phonemes === false ? ' (unconvertible)' : ''}`}</Label>
+                <pre
+                  id="speechphonemes"
+                  className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed"
+                >
+                  {phonemes === false
+                    ? 'Reciter could not parse this text.'
+                    : phonemes.trim() || '—'}
+                </pre>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  size="lg"
+                  aria-label="Preview the text with speech synthesis"
+                  onClick={() => void speak()}
+                  disabled={speaking || text.trim().length === 0}
+                >
+                  {speaking ? 'Speaking…' : 'Preview'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="flex-1"
+                  aria-label="Download the rendered speech as a .wav file"
+                  onClick={download}
+                  disabled={text.trim().length === 0}
+                >
+                  Download .wav
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
-            <CardTitle>Speech synthesizer</CardTitle>
+            <CardTitle>Voice &amp; output</CardTitle>
             <CardDescription>
-              Enter plain English (or SAM phonemes like{' '}
-              <code className="rounded bg-muted px-1">/HEHLOW</code>).
+              Shared by the speak and sing modes.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <div className="grid gap-2">
-              <Label htmlFor="speechinput">Text to speak</Label>
-              <Input
-                id="speechinput"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="Hello , I am Sam."
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="speechwave">Waveform preview</Label>
-              <div className="rounded-md border bg-muted/40 p-2">
-                <canvas
-                  id="speechwave"
-                  ref={canvasRef}
-                  width={760}
-                  height={120}
-                  className="h-24 w-full"
-                  aria-label="Preview of the wave the current settings produce"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label
-                htmlFor="speechphonemes"
-              >{`Phonemes via Reciter${phonemes === false ? ' (unconvertible)' : ''}`}</Label>
-              <pre
-                id="speechphonemes"
-                className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed"
-              >
-                {phonemes === false
-                  ? 'Reciter could not parse this text.'
-                  : phonemes.trim() || '—'}
-              </pre>
-            </div>
-
             {CONTROLS.map((control) => (
               <div key={control.key} className="grid gap-2">
                 <div className="flex items-center justify-between">
@@ -340,28 +576,6 @@ export default function App() {
                   </Button>
                 ))}
               </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                className="flex-1"
-                size="lg"
-                aria-label="Preview the text with speech synthesis"
-                onClick={() => void speak()}
-                disabled={speaking || text.trim().length === 0}
-              >
-                {speaking ? 'Speaking…' : 'Preview'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="lg"
-                className="flex-1"
-                aria-label="Download the rendered speech as a .wav file"
-                onClick={() => sam.download(text, { phonetic: false, bits, hq, masking }, fileNameOf(text))}
-                disabled={text.trim().length === 0}
-              >
-                Download .wav
-              </Button>
             </div>
           </CardContent>
         </Card>

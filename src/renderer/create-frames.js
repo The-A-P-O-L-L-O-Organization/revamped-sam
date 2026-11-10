@@ -86,6 +86,10 @@ export default function CreateFrames (
 
     // get the stress amount (more stress = higher pitch)
     const phase1 = stressPitch_tab47492[tuples[i][2]];
+    // melody override: when the tuple carries a note-derived pitch byte
+    // (see renderer.js), every frame of this phoneme renders at exactly
+    // that pitch instead of the base pitch + stress offset.
+    const melodyPitch = tuples[i][3];
     // get number of frames to write
     // copy from the source to the frames list
     for (let frames = tuples[i][1];frames > 0;frames--) {
@@ -96,7 +100,7 @@ export default function CreateFrames (
       amplitude[1][X]         = (ampldata[phoneme] >> 8) & 0xFF;  // F2 amplitude
       amplitude[2][X]         = (ampldata[phoneme] >> 16) & 0xFF; // F3 amplitude
       sampledConsonantFlag[X] = sampledConsonantFlags[phoneme]; // phoneme data for sampled consonants
-      pitches[X]              = (pitch + phase1) & 0xFF;        // pitch
+      pitches[X]              = (melodyPitch !== undefined ? melodyPitch : (pitch + phase1)) & 0xFF; // pitch
       X++;
     }
   }
