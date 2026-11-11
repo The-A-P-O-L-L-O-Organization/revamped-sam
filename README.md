@@ -171,6 +171,38 @@ byte — a high note on a "V" renders a longer buzz. That is the
 original renderer's behavior, not a melody artifact (the classic
 stress-digit `singmode` has the same property).
 
+### Rhythm and tempo
+
+To sing in rhythm you need to control how long each phoneme sounds.
+SAM's stress digit only switches between the short and the stressed
+length byte, so held notes are made by **repeating the vowel** — keep
+interior repeats *unstressed*, because the parser inserts a glottal
+stop between a stressed vowel, a pause and another stressed vowel,
+which would re-attack the note mid-hold. Diphthongs decompose into
+their first half plus the glide (`AY` → `AA…YX`, `EY` → `EH…YX`), so
+the note sustains on the monophthong and ends with one glide.
+
+Silence between notes is a chain of `Q`s: the glottal stop renders
+with zero formant amplitude, so `Q Q Q Q Q Q Q` is ~370 ms of true
+silence at speed 72. Unlike a comma, `Q` does not trigger the ×1.5
+punctuation length chain (which inflates the preceding syllable's
+tail and throws short notes off the beat).
+
+Two timing facts matter for tempo (see `tools/daisy/README.md` for
+the full model): a formant frame really lasts
+`speed × 162 / 50 / 22050` seconds (≈10.6 ms at speed 72 — the naive
+`speed × 5` reading is 54% too long), and unvoiced sampled consonants
+(S, SH, F, TH…) are **speed-independent** (~105 ms for `S` at any
+speed), so sibilant syllables are relatively longer the faster you
+sing. `tools/daisy/render-sim.mjs` predicts rendered durations
+byte-exactly without listening to audio.
+
+The full worked example is the repo's homage: SAM sings **Daisy Bell**
+(the 1961 IBM 7094 song, later HAL 9000's dying number) in rhythm at
+the transcribed MIDI tempo (165 BPM, one grid unit = 363.6 ms) —
+`tools/daisy/build-daisy.mjs` builds the phonetic score + melody and
+verifies the render timing; the web demo's Sing tab opens on it.
+
 ## Development
 
 Requires Node.js 26+ and [pnpm](https://pnpm.io/) (`npm install -g corepack &&
