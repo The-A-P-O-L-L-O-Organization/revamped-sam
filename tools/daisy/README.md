@@ -54,3 +54,42 @@ against a per-phoneme millisecond model of the real render, corrects
 onset drift sequentially (so floor-limited syllables like `sweet` don't
 push the beat late), and verifies the final text with `render-sim.mjs`,
 which is byte-exact against real renders.
+
+## The chorus score (MIDI-derived)
+
+The final chorus score in `build-daisy.mjs` (`--chorus`) was re-derived
+directly from `daisy-bell.mid` (PPQ 256, 165 BPM → one grid unit =
+363.636 ms) rather than transcribed by ear. Facts baked into the score:
+
+- One unit = one 256-tick step. Note on/off times define each syllable's
+  grid slot; near-contiguous notes mean legato phrasing.
+- Pitch corrections verified against the MIDI: "-swer" is G3 and "love"
+  is A3 (both were transcribed a third low).
+- "an-" in "answer" is stressed — 2 units, matching the arrangement's
+  accent on "give me your AN-swer do".
+- Dramatic pauses after "sweet" (2.38 u) and "seat" (1.38 u) are real,
+  but the vowel is *held through* them (sung 3 u / 2 u) instead of
+  leaving dead silence — silence inside a sung phrase reads as a cut.
+- Likewise the 1-unit lifts inside "Dai-sy": the vowel fills the gap, so
+  onsets stay on the MIDI grid (sy at u2, second Dai at u4) without an
+  audible break inside the word.
+- The ~6-unit instrumental fill after "Daisy, Daisy" (chorus u10–u16) is
+  skipped: the voice sings continuously, like the 1961 recording.
+- Order per pass is [phrases 1-4, refrain], octaves as in the beloved
+  render (the melody's MIDI octave doubling is not reproduced).
+
+Render by-ear pick: `--chorus --speed 72 --masked --smooth` (speed 72 is
+the tempo-true sweet spot — above ~77 the phoneme-length floors make
+quick syllables unachievable).
+
+## Smooth stream renderer (`--smooth`)
+
+`smooth-render.mjs` bypasses the text path: it renders the parsed
+syllable tuples directly with per-syllable frame-granular retuning
+(`tuneSyllable` returns the exact sample count), so every note fits its
+grid slot. Chunk seams are packed to land inside identical vowel holds
+and de-clicked with short PCM fades, and 16-bit output is produced
+directly. The web Sing tab cannot use this path (it renders text), so
+the web default `Daisy, Daisy…` text at speed 72 gets InsertBreath
+glottal stops that the smooth path drops — timing there is
+approximate by design.

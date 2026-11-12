@@ -4,6 +4,7 @@ import Parser from '../../src/parser/parser.js';
 import { sampledConsonantFlags } from '../../src/renderer/tables.js';
 import { noteToPitchByte } from '../../src/renderer/notes.js';
 import { simulate } from './render-sim.mjs';
+import { renderSmoothed } from './smooth-render.mjs';
 
 // Daisy Bell (Harry Dacre, 1892) — homage to the 1961 IBM 7094.
 //
@@ -29,16 +30,19 @@ const frameMs = (speed) => speed * 162 / 50 / 22050 * 1000;
 // Score entry: [phonemes, note, sungUnits, restUnits]
 const CHORUS = [
   // "Daisy, Daisy, give me your answer, do!"
-  ['D6 EH6 Y6',    'D4',  3,   1],  // Dai
-  ['S6 IY6',       'B3',  2,   1],  // sy,
-  ['D6 EH6 Y6',    'G3',  3,   1],  // Dai
-  ['S6 IY6',       'D3',  2,   1],  // sy,
+  // (u/r re-derived from the MIDI note on/off grid: the melody's notes
+  // are nearly contiguous — 10-30 tick gaps — so phrases sing legato and
+  // rests exist only where the arrangement actually has gaps.)
+  ['D6 EH6 Y6',    'D4',  2,   0],  // Dai (vowel held through the MIDI lift)
+  ['S6 IY6',       'B3',  2,   0],  // sy, (vowel held through the MIDI lift)
+  ['D6 EH6 Y6',    'G3',  3,   0],  // Dai
+  ['S6 IY6',       'D3',  2.85, 0], // sy, (2.85u; instrumental fill skipped)
   ['G6 IH6 V6',    'E3',  1,   0],  // give
   ['M2 IY2',       'F#3', 1,   0],  // me
   ['Y2 AO2 R2',    'G3',  1,   0],  // your
-  ['AE2 N2',       'E3',  2,   0],  // an-
+  ['AE2 N2',       'E3',  2,   0],  // an- (stressed, 2 units in the MIDI)
   ['S4 ER4',       'G3',  1,   0],  // -swer
-  ['D6 UW6',       'D3',  5,   1],  // do.
+  ['D6 UW6',       'D3',  5,   2],  // do. (2-unit phrase rest)
   // "I'm half crazy, all for the love of you!"
   ['AY6 M6',       'A3',  3,   0],  // I'm
   ['/H6 AE6 F6',   'D4',  3,   0],  // half
@@ -56,14 +60,14 @@ const CHORUS = [
   ['B2 IY2',       'B3',  1,   0],  // be
   ['AH2',          'A3',  1,   0],  // a
   ['S4 T4 AY4',    'D4',  2,   0],  // sty-
-  ['L2 IH2 SH2',   'B3',  1,   1],  // -lish,
-  ['M2 AE2 R2',    'A3',  1,   0],  // mar-
-  ['IH7 J7',       'G3',  3.5, 0],  // -riage,
+  ['L2 IH2 SH2',   'B3',  1,   0],  // -lish, (legato into mar-)
+  ['M2 AE2 R2',    'A3',  1,   0],  // mar- (the MIDI's A-B-A turn is compressed)
+  ['IH7 J7',       'G3',  4,   0],  // -riage,
   // "I can't afford a carriage,"
   ['AY2',          'A3',  1,   0],  // I
   ['K4 AE4 N4 T4', 'B3',  2,   0],  // can't
   ['AH2 F2',       'G3',  1,   0],  // af-
-  ['AO4 R4 D4',    'E3',  2,   1],  // -ford,
+  ['AO4 R4 D4',    'E3',  2,   0],  // -ford, (legato into a)
   ['AH2',          'G3',  1,   0],  // a
   ['K2 AE2 R2',    'E3',  1,   0],  // car-
   ['IH7 J7',       'D3',  3,   1],  // -riage,
@@ -71,18 +75,18 @@ const CHORUS = [
   ['B2 AH2 T2',    'D3',  1,   0],  // But
   ['Y2 UW2 L2',    'G3',  2,   0],  // you'll
   ['L4 UH4 K4',    'B3',  1,   0],  // look
-  ['S6 W6 IY6 T6', 'A3',  1,   1],  // sweet
-  ['AO4 N4',       'G3',  2,   0],  // on
+  ['S6 W6 IY6 T6', 'A3',  3,   0],  // sweet (vowel held through the pause)
+  ['AO4 N4',       'G3',  2,   0],  // (up)on
   ['DH2 AH2',      'B3',  1,   0],  // the
-  ['S4 IY4 T4',    'A3',  1,   1],  // seat
+  ['S4 IY4 T4',    'A3',  2,   0],  // seat (vowel held through the pause)
   ['AH1 V1',       'B3',  0.5, 0],  // of
   ['AH1',          'C4',  0.5, 0],  // a
   ['B2 AY2',       'D4',  1,   0],  // bi-
   ['S2 IH2',       'B3',  1,   0],  // cy-
-  ['K2 AH2 L2',    'G3',  1,   1],  // -cle,
+  ['K2 AH2 L2',    'G3',  1,   0],  // -cle, (legato into built)
   ['B4 IH4 L4 T4', 'A3',  2,   0],  // built
   ['F2 AO2 R2',    'D3',  1,   0],  // for
-  ['T8 UW8',       'G3',  4,   1],  // two.
+  ['T8 UW8',       'G3',  4,   1],  // two. (final note + release)
 ];
 
 const VERSE = [
@@ -102,7 +106,16 @@ const VERSE = [
   ['S6 IY6',         'B3',  2, 1],  // sy.
 ];
 
-const score = [...VERSE, ...CHORUS];
+// CLI: --chorus (only the IBM-sung chorus), --speed n (single speed),
+// --mouth n --throat n --pitch n (voice overrides), --out prefix (WAV name).
+const argv = process.argv.slice(2);
+const flag = (name) => argv.includes(`--${name}`);
+const val = (name) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 ? argv[i + 1] : undefined;
+};
+
+const score = flag('chorus') ? [...CHORUS] : [...VERSE, ...CHORUS];
 
 // Held-diphthong decomposition: [first-half monophthong, glide phoneme].
 const DIP = {
@@ -258,7 +271,13 @@ function buildFit (speed, unitMs) {
   return { expansions, rests };
 }
 
-const VOICE = { pitch: 197, mouth: 134, throat: 143, hq: true, masking: false };
+const VOICE = {
+  pitch: Number(val('pitch') ?? 197),
+  mouth: Number(val('mouth') ?? 134),
+  throat: Number(val('throat') ?? 143),
+  hq: true,
+  masking: flag('masked'),
+};
 const totalUnits = score.reduce((s, [, , u, r]) => s + u + r, 0);
 
 // Replicate the renderer's chunk split + melody attach and run the
@@ -286,21 +305,40 @@ function exactSim (text, melody, spd) {
   return { chunks: real.length, secs: samples / 22050, maxChunk };
 }
 
-for (const spd of [72, 125]) {
+const speeds = val('speed') ? [Number(val('speed'))] : [72, 125];
+const outPrefix = val('out');
+// Path-aware timing measurement: when rendering via the smooth tuple
+// stream, calibration must measure that stream (it drops the parser's
+// InsertBreath glottal stops that the text path renders). The last
+// smooth render's per-syllable fit info is kept for the report.
+let lastFitInfo = null;
+function pathSim (text, melody, syllableIds, spd) {
+  if (flag('smooth')) {
+    const notes = score.map(([, note]) => note);
+    const units = score.map(([, , u]) => u);
+    const restUnits = score.map(([, , , r]) => r);
+    const r = renderSmoothed(text, syllableIds, notes, units, restUnits, { ...VOICE, speed: spd, singmode: true, bits: 16 }, score.map((s) => s[0]));
+    lastFitInfo = r.fitInfo;
+    return { secs: r.samples / 22050 };
+  }
+  return exactSim(text, melody, spd);
+}
+
+for (const spd of speeds) {
   // calibration: the analytic ms model is ~2% optimistic against the
   // exact simulator (voiced-sample interleaves etc.), so build once,
   // measure the true total, rescale the unit and rebuild.
   let unit = UNIT_MS;
   let built = buildFit(spd, unit);
   let asm = assemble(score, built.expansions, built.rests);
-  let sim = exactSim(asm.text, asm.melody, spd);
+  let sim = pathSim(asm.text, asm.melody, asm.syllableIds, spd);
   const targetSecs = totalUnits * UNIT_MS / 1000;
   const factor = sim.secs / targetSecs;
   if (Math.abs(factor - 1) > 0.004) {
     unit = UNIT_MS / factor;
     built = buildFit(spd, unit);
     asm = assemble(score, built.expansions, built.rests);
-    sim = exactSim(asm.text, asm.melody, spd);
+    sim = pathSim(asm.text, asm.melody, asm.syllableIds, spd);
   }
   const { text, melody, syllableIds } = asm;
   const { expansions, rests } = built;
@@ -309,15 +347,28 @@ for (const spd of [72, 125]) {
   console.log(`unit calibrated to ${unit.toFixed(2)} ms (analytic) -> exact-sim ${sim.secs.toFixed(2)} s vs MIDI ${targetSecs.toFixed(2)} s`);
   console.log('syllable          target_ms  actual_ms  expansion');
   let totalErr = 0;
-  score.forEach(([ph, note, u], i) => {
-    const target = u * unit;
-    const actual = measure(text, syllableIds[i], spd);
-    totalErr += Math.abs(actual - target);
-    console.log(
-      ph.padEnd(16), String(Math.round(target)).padStart(8), String(Math.round(actual)).padStart(9), ' ',
-      expansions[i].join(' '), ' ', rests[i][1] ? 'rest:' + rests[i][1] + 'Q' : ''
-    );
-  });
+  if (flag('smooth')) {
+    // the smooth path tunes tuple lengths itself; the parse-based
+    // measure() below would report pre-tune lengths, so print the
+    // tuned table from the calibration render's fit info instead
+    lastFitInfo.forEach(({ targetMs, actualMs }, i) => {
+      totalErr += Math.abs(actualMs - targetMs);
+      console.log(
+        score[i][0].padEnd(16), String(Math.round(targetMs)).padStart(8), String(Math.round(actualMs)).padStart(9), ' ',
+        expansions[i].join(' '), ' ', rests[i][1] ? 'rest:' + rests[i][1] + 'Q' : ''
+      );
+    });
+  } else {
+    score.forEach(([ph, note, u], i) => {
+      const target = u * unit;
+      const actual = measure(text, syllableIds[i], spd);
+      totalErr += Math.abs(actual - target);
+      console.log(
+        ph.padEnd(16), String(Math.round(target)).padStart(8), String(Math.round(actual)).padStart(9), ' ',
+        expansions[i].join(' '), ' ', rests[i][1] ? 'rest:' + rests[i][1] + 'Q' : ''
+      );
+    });
+  }
   console.log('total syllable-fit error:', Math.round(totalErr), 'ms over', score.length, 'syllables');
 
   // alignment check: one note per distinct input phoneme token. Q rests
@@ -336,14 +387,25 @@ for (const spd of [72, 125]) {
   console.log('BREAK chunk boundaries:', breaks.length, '| InsertBreath glottal stops (len 4):', breathQs);
   console.log(`largest chunk: ${sim.maxChunk} frames (must stay under 255 to avoid the 8-bit wrap)`);
 
-  const wav = SamJs.toWav(text, { ...VOICE, phonetic: true, singmode: true, melody, speed: spd, bits: 16 });
+  const name = outPrefix ?? `daisy-v2-${spd}`;
+  let wav;
+  if (flag('smooth')) {
+    const notes = score.map(([, note]) => note);
+    const units = score.map(([, , u]) => u);
+    const restUnits = score.map(([, , , r]) => r);
+    const r = renderSmoothed(text, syllableIds, notes, units, restUnits, { ...VOICE, speed: spd, singmode: true, bits: 16 });
+    wav = r.wav;
+    console.log(`smooth stream: ${r.chunks} chunks, largest ${r.maxChunk} frames, exact-sim ${((r.samples) / 22050).toFixed(2)} s`);
+  } else {
+    wav = SamJs.toWav(text, { ...VOICE, phonetic: true, singmode: true, melody, speed: spd, bits: 16 });
+  }
   if (wav === false) { console.log('RENDER FAILED'); continue; }
-  writeFileSync(`/tmp/opencode/daisy-v2-${spd}.wav`, Buffer.from(wav));
+  writeFileSync(`/tmp/opencode/${name}.wav`, Buffer.from(wav));
   const secs = (wav.length - 44) / 2 / 22050;
-  console.log(`daisy-v2-${spd}.wav: ${secs.toFixed(2)} s (MIDI target ${targetSecs.toFixed(2)} s)`);
+  console.log(`${name}.wav: ${secs.toFixed(2)} s (MIDI target ${targetSecs.toFixed(2)} s)`);
 
-  writeFileSync(`/tmp/opencode/daisy-v2-${spd}-song.txt`, text);
-  writeFileSync(`/tmp/opencode/daisy-v2-${spd}-melody.txt`, melody.join(' '));
+  writeFileSync(`/tmp/opencode/${name}-song.txt`, text);
+  writeFileSync(`/tmp/opencode/${name}-melody.txt`, melody.join(' '));
   console.log('SONG:');
   console.log(text);
   console.log('MELODY:');
