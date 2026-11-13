@@ -1,83 +1,69 @@
-// Tuple-stream renderer for the Daisy chorus: bypasses text-level
-// rendering so every syllable lands EXACTLY on the MIDI grid.
+// Smooth-stream song renderer: bypasses text-level rendering so every
+// syllable lands EXACTLY on its grid slot.
 //
-// Why this exists: the text path has two timing defects the parser
-// cannot avoid.
+// Why this exists: the text path (Parser -> Renderer) has two timing
+// defects the parser cannot avoid.
 //
 //   1. The parser's InsertBreath keeps render chunks under ~232 frames
 //      by turning the LAST SPACE of an over-long section into a silent
 //      glottal stop (Q, len 4) + BREAK. Singing text has a space
 //      between every syllable, so the cut lands mid-word.
 //
-//   2. The fit engine can only add or remove WHOLE phoneme tuples
+//   2. Text-level fitting can only add or remove WHOLE phoneme tuples
 //      (repeat quanta of ~100 ms at speed 72), so syllables overshoot
 //      their grid target by up to a full repeat — the "stretched
 //      words". Tuple lengths themselves are 8-bit table values the
 //      parser never compresses.
 //
-// This module fixes both: it parses the built text for per-syllable
+// This module fixes both. It parses each syllable's phoneme string into
 // tuples, then (a) retunes every tuple's length so each syllable hits
-// its MIDI grid span exactly (the byte-exact simulator measures the
-// real rendered duration, including the sampled-consonant pair
-// extras), (b) emits rests as silent Q tuples sized to the grid, and
-// (c) packs the tuples into chunks whose BREAK boundaries land only
-// inside runs of identical vowel tuples — audio-seamless positions.
+// its grid span exactly (the byte-exact `simulate()` measures the real
+// rendered duration, including the sampled-consonant pair extras),
+// (b) emits rests as silent Q tuples sized to the grid, and (c) packs
+// the tuples into chunks whose BREAK boundaries land only inside runs
+// of identical vowel tuples — audio-seamless positions.
 //
-// Rendering calls Renderer() once with the full tuple stream (melody
-// undefined: the tuples already carry their pitch bytes in slot [3]),
-// then de-clicks each chunk seam in the PCM: a chunk boundary restarts
-// the glottal pulse mid-cycle, which clicks when it lands inside a
-// held note. A ~2 ms fade-to-zero on both sides of the seam is
-// inaudible against the masking buzz and removes the tick.
-import Parser from '../../src/parser/parser.js';
-import Renderer from '../../src/renderer/renderer.js';
-import BuildWav from '../../src/util/wav.js';
-import { noteToPitchByte } from '../../src/renderer/notes.js';
-import { simulate } from './render-sim.mjs';
-import { PhonemeNameTable } from '../../src/parser/tables.js';
-import { phonemeHasFlag } from '../../src/parser/util.js';
-import { FLAG_VOWEL } from '../../src/parser/constants.js';
+// Rendering calls Renderer() once with the full tuple stream (no melody
+// array: the tuples already carry their pitch bytes in slot [3]), then
+// de-clicks each chunk seam in the PCM: a chunk boundary restarts the
+// glottal pulse mid-cycle, which clicks when it lands inside a held
+// note. A ~2 ms fade-to-zero on both sides of the seam is inaudible
+// against the masking buzz and removes the tick.
+import Parser from '../parser/parser.js';
+import Renderer from './renderer.js';
+import BuildWav from '../util/wav.js';
+import { noteToPitchByte } from './notes.js';
+import { simulate } from './simulate.js';
+import { PhonemeNameTable } from '../parser/tables.js';
+import { phonemeHasFlag } from '../parser/util.js';
+import { FLAG_VOWEL } from '../parser/constants.js';
 
-const BREAK = 255 - 1; // 254
+const BREAK = 254;
 const END = 255;
 
-// One 256-tick grid step at 165 BPM (see build-daisy.mjs).
+// Default grid step of the Daisy Bell arrangement: one 256-tick step at
+// 165 BPM (see tools/daisy/build-daisy.mjs).
 const UNIT_MS = 363.636;
 
-const frames = (tuples, qs = 0) => tuples.reduce((s, t) => s + t[1], 0) + qs * 5;
-
 /**
- * Group the parsed phoneme stream into per-syllable tuple lists.
+ * Parse one syllable's phoneme string into render tuples.
  *
- * @param {String}   text         built phonetic text (syllables + Q rests)
- * @param {Array<Set>} syllableIds token ids per syllable, from assemble()
- * @return {{ syllables: Array<Array>, restQs: Array<Number> }}
- *   syllables[i] = tuples [phoneme, length, stress] of syllable i,
- *   restQs[i] = number of len-5 Q rest frames belonging after syllable i.
+ * @param {String} phonemes Phonetic input like 'D6 EH6 Y6'.
+ * @return {Array<Array>} [phoneme, length, stress] tuples (placeholders
+ *   and BREAK/END markers removed).
  */
-export function groupSyllables (text, syllableIds) {
-  const { phonemes, tokens } = Parser(text);
-  const tok2syl = new Map();
-  syllableIds.forEach((set, i) => set.forEach((t) => tok2syl.set(t, i)));
-  const syllables = syllableIds.map(() => []);
-  const restQs = syllableIds.map(() => 0);
-  let cur = -1;
-  phonemes.forEach((p, i) => {
+function parseSyllable (phonemes) {
+  const parsed = Parser(String(phonemes).toUpperCase());
+  if (false === parsed) {
+    return false;
+  }
+  return parsed.phonemes.filter((p) => {
     const A0 = p[0];
-    if (!A0) return;                       // space placeholder
-    if (A0 === END) return;
-    if (A0 === BREAK) return;              // InsertBreath split — re-placed below
-    if (A0 === 31 && p[1] === 4) return;   // InsertBreath glottal stop — re-placed
-    const tok = tokens[i];
-    if (tok2syl.has(tok)) {
-      cur = tok2syl.get(tok);
-      syllables[cur].push([A0, p[1], p[2]]);
-    } else if (A0 === 31) {
-      // our own Q rest (len 5, its own input token) — the exact-timing
-      // path re-derives rests from the grid, so these are dropped.
-    }
+    if (!A0 || A0 === END || A0 === BREAK) return false;
+    // A len-4 Q is the parser's InsertBreath glottal stop, not content.
+    if (A0 === 31 && p[1] === 4) return false;
+    return true;
   });
-  return { syllables, restQs };
 }
 
 /**
@@ -89,6 +75,7 @@ export function groupSyllables (text, syllableIds) {
  * @param {Array<Array>} tuples      mutable [phoneme, length, stress]
  * @param {Number} targetSamples     exact rendered-duration target
  * @param {Number} frameSamples      samples per frame at this speed
+ * @param {Number} speed
  */
 function tuneSyllable (tuples, targetSamples, frameSamples, speed) {
   const isVowel = (t) => phonemeHasFlag(t[0], FLAG_VOWEL);
@@ -151,27 +138,48 @@ function tuneSyllable (tuples, targetSamples, frameSamples, speed) {
 }
 
 /**
- * Build + render the smooth stream end to end, exactly on the grid.
+ * Render a song end to end, exactly on its grid.
  *
- * @param {String} text          built phonetic text
- * @param {Array<Set>} syllableIds
- * @param {Array<String>} notes  one note name per syllable
- * @param {Array<Number>} units  sung grid units per syllable
- * @param {Array<Number>} restUnits  rest grid units after each syllable
- * @param {Object} voice         { pitch, mouth, throat, speed, singmode, hq, masking, bits }
- * @return {{ wav: Uint8Array, chunks: Number, maxChunk: Number, samples: Number }}
+ * @param {Object} song
+ * @param {String[]} song.syllables  One phoneme string per syllable
+ *   ('D6 EH6 Y6'), sung in order.
+ * @param {String[]} song.notes      One note name per syllable
+ *   ('C4', 'F#3', 'Bb5'), or '-' to keep the base pitch.
+ * @param {Number[]} song.units      Sung grid units per syllable.
+ * @param {Number[]} [song.restUnits] Rest grid units after each syllable
+ *   (silent; default 0). Grid position of syllable i+1 = sum of
+ *   units+restUnits of syllables 0..i.
+ * @param {Number}   [song.unitMs]   Milliseconds per grid unit.
+ *   Default 363.636 (one 256-tick step at 165 BPM).
+ * @param {String[]} [song.names]    Optional debug labels per syllable.
+ * @param {Object} voice           { pitch, mouth, throat, speed,
+ *   singmode, hq, masking, bits, debug }
+ *
+ * @return {Object|Boolean} false when a syllable fails to parse, else
+ *   { wav, buffer, int16, float32, chunks, maxChunk, samples, fitInfo }
+ *   — wav: complete .wav file image (de-clicked); buffer: raw unsigned
+ *   8-bit samples; int16: declicked signed 16-bit samples; float32:
+ *   playback samples; fitInfo: per-syllable target/actual ms.
  */
-export function renderSmoothed (text, syllableIds, notes, units, restUnits, voice, syllableNames) {
-  const speed = voice.speed;
+export function renderSmoothStream (song, voice = {}) {
+  const speed = voice.speed ?? 72;
   const frameSamples = speed * 162 / 50; // samples per frame
-  const unitSamples = UNIT_MS / 1000 * 22050;
+  const unitMs = song.unitMs ?? UNIT_MS;
+  const unitSamples = unitMs / 1000 * 22050;
   const budget = 228;                    // chunk frame budget (8-bit totals)
-  const score2 = (i) => (syllableNames?.[i] ?? '?');
+  const units = song.units;
+  const restUnits = song.restUnits ?? song.units.map(() => 0);
+  const bits = voice.bits === 16 ? 16 : 8;
+  const debug = voice.debug === true;
+  const name = (i) => song.names?.[i] ?? '?';
 
-  const { syllables } = groupSyllables(text, syllableIds);
-  const noteBytes = notes.map((n) => noteToPitchByte(n));
+  const syllables = song.syllables.map(parseSyllable);
+  if (syllables.some((s) => s === false || s.length === 0)) {
+    return false;
+  }
+  const noteBytes = song.notes.map((n) => noteToPitchByte(n));
 
-  // MIDI grid: sample position of each entry boundary.
+  // Grid: sample position of each entry boundary.
   const P = [0];
   let cum = 0;
   units.forEach((u, i) => { cum += u + restUnits[i]; P.push(Math.round(cum * unitSamples)); });
@@ -287,50 +295,63 @@ export function renderSmoothed (text, syllableIds, notes, units, restUnits, voic
   const maxChunk = Math.max(...sims.map((s) => s.t));
   const samples = sims.reduce((a, s) => a + s.samples, 0);
 
-  const buf = Renderer(
+  const buffer = Renderer(
     flat, voice.pitch, voice.mouth, voice.throat, speed,
     voice.singmode !== false, voice.hq === true, voice.masking !== false,
     undefined, undefined
   );
 
   // 7) de-click the seams: fade ~2 ms to zero on both sides of each
-  //    chunk boundary (the pulse restarts mid-cycle at a seam).
-  const bits = voice.bits ?? 16;
-  let wav = BuildWav(buf, bits);
+  //    chunk boundary (the pulse restarts mid-cycle at a seam). At
+  //    bits=16 the fade runs on the exact sample values the container
+  //    stores; at bits=8 on the byte samples themselves.
+  let wav = BuildWav(buffer, bits);
+  let int16;
   if (bits === 16) {
-    let pos = 0;
-    const seams = [];
-    sims.slice(0, -1).forEach((s) => { pos += s.samples; seams.push(pos); });
-    wav = declick16(wav, seams);
+    const pos = new Int16Array(wav.buffer, wav.byteOffset + 44, (wav.length - 44) / 2);
+    declickInt16(pos, seamsOf(sims));
+    int16 = new Int16Array(pos);
+  } else {
+    const bytes = new Uint8Array(wav.buffer, wav.byteOffset + 44, wav.length - 44);
+    declickUint8(bytes, seamsOf(sims));
+    int16 = new Int16Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) int16[i] = (bytes[i] - 128) * 256;
   }
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
 
-  if (process.env.DEBUG_SMOOTH) {
+  if (debug) {
     console.log('=== tuned syllables ===');
     tuned.forEach((ts, i) => {
       const seq = ts.map((x) => (x[0] === 31 ? `Q${x[1]}` : `${PhonemeNameTable[x[0]]}x${x[1]}`)).join(' ');
-      console.log(`syl ${String(i).padStart(2)} ${score2(i)}: ${seq}`);
+      console.log(`syl ${String(i).padStart(2)} ${name(i)}: ${seq}`);
     });
     console.log('=== actual smooth stream chunks ===');
     chunkList.forEach((c, i) => {
       const nf = c.reduce((s, x) => s + x[1], 0);
-      const seq = c.map((x) => (x[0] === 31 ? `Q${x[1]}` : `${PhonemeNameTable[x[0]]}/${x[3]}x${x[1]}`)).join(' ');
+      const seq = c.map((x) => (x[0] === 31 ? `Q${x[1]}` : `${PhonemeNameTable[x[0]]}/${x[3]}x${x[1]}s${x[2]}`)).join(' ');
       console.log(`chunk ${String(i).padStart(2)}: ${String(nf).padStart(3)}f ${String(sims[i].samples).padStart(5)}smp  ${seq}`);
     });
   }
 
-  return { wav, chunks: chunkList.length, maxChunk, samples, fitInfo };
+  return { wav, buffer, int16, float32, chunks: chunkList.length, maxChunk, samples, fitInfo };
+}
+
+function seamsOf (sims) {
+  const seams = [];
+  let pos = 0;
+  sims.slice(0, -1).forEach((s) => { pos += s.samples; seams.push(pos); });
+  return seams;
 }
 
 /**
- * Fade ~2 ms to zero on both sides of each seam of a 16-bit WAV.
+ * Fade ~2 ms to zero on both sides of each seam of signed 16-bit PCM.
  *
- * @param {Uint8Array} wav  WAV file image (44-byte header, 16-bit PCM)
- * @param {Array<Number>} seams  sample indices where chunks join
- * @return {Uint8Array}
+ * @param {Int16Array} pcm    Sample view to fade in place.
+ * @param {Array<Number>} seams  Sample indices where chunks join.
  */
-function declick16 (wav, seams) {
+function declickInt16 (pcm, seams) {
   const W = 24; // ~1.1 ms per side at 22050 Hz
-  const pcm = new Int16Array(wav.buffer, wav.byteOffset + 44, (wav.length - 44) / 2);
   for (const s of seams) {
     for (let d = 0; d < W; d++) {
       // left side: sample at s-1-d scaled down as it nears the seam
@@ -341,5 +362,17 @@ function declick16 (wav, seams) {
       if (ri < pcm.length) pcm[ri] = Math.round(pcm[ri] * (d + 1) / W);
     }
   }
-  return wav;
+}
+
+/** Same fade for unsigned 8-bit PCM (128 = silence). */
+function declickUint8 (pcm, seams) {
+  const W = 24;
+  for (const s of seams) {
+    for (let d = 0; d < W; d++) {
+      const li = s - 1 - d;
+      if (li >= 0) pcm[li] = Math.round((pcm[li] - 128) * d / W) + 128;
+      const ri = s + d;
+      if (ri < pcm.length) pcm[ri] = Math.round((pcm[ri] - 128) * (d + 1) / W) + 128;
+    }
+  }
 }

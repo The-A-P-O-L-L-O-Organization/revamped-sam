@@ -84,12 +84,17 @@ quick syllables unachievable).
 
 ## Smooth stream renderer (`--smooth`)
 
-`smooth-render.mjs` bypasses the text path: it renders the parsed
-syllable tuples directly with per-syllable frame-granular retuning
-(`tuneSyllable` returns the exact sample count), so every note fits its
-grid slot. Chunk seams are packed to land inside identical vowel holds
-and de-clicked with short PCM fades, and 16-bit output is produced
-directly. The web Sing tab cannot use this path (it renders text), so
-the web default `Daisy, Daisy…` text at speed 72 gets InsertBreath
-glottal stops that the smooth path drops — timing there is
-approximate by design.
+The tuple-stream renderer lives in the library (`src/renderer/
+smooth-stream.js`, exposed as `SamJs.singSong()`/`speakSong()`/
+`downloadSong()` with a `SongSpec` — per-syllable phoneme strings,
+notes, grid units, rests). It renders with per-syllable frame-granular
+retuning (`tuneSyllable` returns the exact sample count, measured by
+`src/renderer/simulate.js` — the byte-exact timing model), exact silent
+grid rests, chunk seams packed to land inside identical vowel holds
+with short PCM de-click fades, and 16-bit output. The web Sing tab's
+"Daisy (exact)" mode renders `web/src/daisy-song.ts` (generated from
+this score via `--dump-spec`) through the same path, so the site sounds
+like the tool render (byte-identical at speed 72); the speed slider
+retunes client-side. The web's "Classic digits"/"Melody notes" modes
+still go through the text path, where timing is approximate by design
+(InsertBreath glottal stops at speed 72).

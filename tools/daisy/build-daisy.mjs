@@ -4,7 +4,7 @@ import Parser from '../../src/parser/parser.js';
 import { sampledConsonantFlags } from '../../src/renderer/tables.js';
 import { noteToPitchByte } from '../../src/renderer/notes.js';
 import { simulate } from './render-sim.mjs';
-import { renderSmoothed } from './smooth-render.mjs';
+import { renderSmoothStream } from '../../src/renderer/smooth-stream.js';
 
 // Daisy Bell (Harry Dacre, 1892) — homage to the 1961 IBM 7094.
 //
@@ -312,16 +312,29 @@ const outPrefix = val('out');
 // InsertBreath glottal stops that the text path renders). The last
 // smooth render's per-syllable fit info is kept for the report.
 let lastFitInfo = null;
-function pathSim (text, melody, syllableIds, spd) {
+function pathSim (expansions, rests, spd) {
   if (flag('smooth')) {
-    const notes = score.map(([, note]) => note);
-    const units = score.map(([, , u]) => u);
-    const restUnits = score.map(([, , , r]) => r);
-    const r = renderSmoothed(text, syllableIds, notes, units, restUnits, { ...VOICE, speed: spd, singmode: true, bits: 16 }, score.map((s) => s[0]));
+    const r = renderSmoothStream(songSpec(expansions), {
+      ...VOICE, speed: spd, singmode: true, bits: 16, debug: Boolean(process.env.DEBUG_SMOOTH),
+    });
     lastFitInfo = r.fitInfo;
-    return { secs: r.samples / 22050 };
+    return { secs: r.samples / 22050, chunks: r.chunks, maxChunk: r.maxChunk };
   }
-  return exactSim(text, melody, spd);
+  const asm = assemble(score, expansions, rests);
+  return exactSim(asm.text, asm.melody, spd);
+}
+
+// The builder score in the library's SongSpec shape: per-syllable phoneme
+// strings, notes, grid units and rests.
+function songSpec (expansions) {
+  return {
+    syllables: expansions.map((e) => e.join(' ')),
+    notes: score.map(([, note]) => note),
+    units: score.map(([, , u]) => u),
+    restUnits: score.map(([, , , r]) => r),
+    names: score.map((s) => s[0]),
+    unitMs: UNIT_MS,
+  };
 }
 
 for (const spd of speeds) {
@@ -331,14 +344,14 @@ for (const spd of speeds) {
   let unit = UNIT_MS;
   let built = buildFit(spd, unit);
   let asm = assemble(score, built.expansions, built.rests);
-  let sim = pathSim(asm.text, asm.melody, asm.syllableIds, spd);
+  let sim = pathSim(built.expansions, built.rests, spd);
   const targetSecs = totalUnits * UNIT_MS / 1000;
   const factor = sim.secs / targetSecs;
   if (Math.abs(factor - 1) > 0.004) {
     unit = UNIT_MS / factor;
     built = buildFit(spd, unit);
     asm = assemble(score, built.expansions, built.rests);
-    sim = pathSim(asm.text, asm.melody, asm.syllableIds, spd);
+    sim = pathSim(built.expansions, built.rests, spd);
   }
   const { text, melody, syllableIds } = asm;
   const { expansions, rests } = built;
@@ -390,10 +403,9 @@ for (const spd of speeds) {
   const name = outPrefix ?? `daisy-v2-${spd}`;
   let wav;
   if (flag('smooth')) {
-    const notes = score.map(([, note]) => note);
-    const units = score.map(([, , u]) => u);
-    const restUnits = score.map(([, , , r]) => r);
-    const r = renderSmoothed(text, syllableIds, notes, units, restUnits, { ...VOICE, speed: spd, singmode: true, bits: 16 });
+    const r = renderSmoothStream(songSpec(built.expansions), {
+      ...VOICE, speed: spd, singmode: true, bits: 16, debug: Boolean(process.env.DEBUG_SMOOTH),
+    });
     wav = r.wav;
     console.log(`smooth stream: ${r.chunks} chunks, largest ${r.maxChunk} frames, exact-sim ${((r.samples) / 22050).toFixed(2)} s`);
   } else {
@@ -406,6 +418,12 @@ for (const spd of speeds) {
 
   writeFileSync(`/tmp/opencode/${name}-song.txt`, text);
   writeFileSync(`/tmp/opencode/${name}-melody.txt`, melody.join(' '));
+  if (flag('dump-spec')) {
+    // The SongSpec the web app embeds (single source of truth: the score
+    // above, expansions as fitted at this speed).
+    writeFileSync(`/tmp/opencode/${name}-spec.json`, JSON.stringify(songSpec(built.expansions), null, 2));
+    console.log('song spec dumped to', `/tmp/opencode/${name}-spec.json`);
+  }
   console.log('SONG:');
   console.log(text);
   console.log('MELODY:');

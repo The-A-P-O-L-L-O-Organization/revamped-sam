@@ -96,6 +96,47 @@ import { PlayBuffer, RenderBuffer } from './util/player.js';
 import { SamProcess, SamBuffer, SamBuffer16 } from './sam/sam.js';
 import BuildWav from './util/wav.js';
 import TextToPhonemes from './reciter/reciter.js';
+import { renderSmoothStream } from './renderer/smooth-stream.js';
+
+/**
+ * A song for the smooth-stream renderer (`singSong`/`speakSong`): a
+ * syllable/note/grid spec rendered tuple-by-tuple, exactly on the grid
+ * (see src/renderer/smooth-stream.js).
+ */
+export interface SongSpec {
+  /** One phoneme string per syllable ('D6 EH6 Y6'), sung in order. */
+  syllables: string[];
+  /** One note name per syllable ('C4', 'F#3', 'Bb5'), or '-' for the base pitch. */
+  notes: string[];
+  /** Sung grid units per syllable. */
+  units: number[];
+  /** Rest grid units after each syllable (silent). Default 0. */
+  restUnits?: number[];
+  /** Milliseconds per grid unit. Default 363.636 (one 256-tick step at 165 BPM). */
+  unitMs?: number;
+  /** Optional per-syllable labels for debug output. */
+  names?: string[];
+}
+
+/** What singSong() returns for a successfully rendered song. */
+export interface SingSongResult {
+  /** Complete .wav file image (de-clicked), Uint8Array. */
+  wav: Uint8Array;
+  /** Raw unsigned 8-bit PCM samples (128 = silence). */
+  buffer: Uint8Array;
+  /** De-clicked signed 16-bit PCM samples. */
+  int16: Int16Array;
+  /** De-clicked playback samples (-1..1). */
+  float32: Float32Array;
+  /** Number of render chunks (BREAK-separated). */
+  chunks: number;
+  /** Largest chunk in frames (stays under the 255-frame 8-bit limit). */
+  maxChunk: number;
+  /** Total sample count at 22050 Hz. */
+  samples: number;
+  /** Per-syllable timing report: target vs actual milliseconds. */
+  fitInfo: Array<{ targetMs: number; actualMs: number }>;
+}
 
 /**
  * Keys accepted by SamOptions - the runtime validation allowlist.
@@ -168,6 +209,14 @@ function renderWav (text: string, options: SamOptions): SamProcessResult {
     return false;
   }
   return BuildWav(buffer, options.bits);
+}
+
+/**
+ * Render a song through the smooth-stream renderer, shared by the
+ * instance singSong() and the static SamJs.singSong().
+ */
+function renderSong (song: SongSpec, options: SamOptions): SingSongResult | false {
+  return renderSmoothStream(song, options) as SingSongResult | false;
 }
 
 /**
@@ -283,6 +332,71 @@ function samJsFactory (options?: SamOptions): SamJsInstance {
       }
       RenderBuffer(buffer, filename || 'sam.wav', merged.bits);
     },
+
+    /**
+     * Render a song (syllable/note/grid spec) through the smooth-stream
+     * renderer: per-syllable tuple retuning, exact grid rests, seamless
+     * chunk packing and de-clicked seams. See src/renderer/smooth-stream.js
+     * and SongSpec.
+     *
+     * @param {SongSpec} song           The song to render.
+     * @param {SamInputOptions} [options] Per-call option overrides.
+     *
+     * @return {SingSongResult|Boolean} The rendered song, or false when
+     *                                  a syllable fails to parse.
+     */
+    singSong (song: SongSpec, callOptions?: SamInputOptions): SingSongResult | false {
+      return renderSong(song, resolveOptions(opts, callOptions) as SamOptions);
+    },
+
+    /**
+     * Render a song (see singSong()) and play it over the speakers.
+     *
+     * @param {SongSpec} song           The song to render.
+     * @param {SamInputOptions} [options] Per-call option overrides.
+     *
+     * @return {Promise<boolean>} Resolves once playback has finished.
+     */
+    speakSong (song: SongSpec, callOptions?: SamInputOptions): Promise<boolean> {
+      const merged = resolveOptions(opts, callOptions) as SamOptions;
+      const result = renderSong(song, merged);
+      if (result === false) {
+        return Promise.reject(new Error('SamJs.speakSong(): could not parse the passed song.'));
+      }
+      return PlayBuffer(result.float32);
+    },
+
+    /**
+     * Render a song (see singSong()) and download it as a .wav file
+     * (browser only).
+     *
+     * @param {SongSpec} song           The song to render.
+     * @param {SamInputOptions} [options] Per-call option overrides.
+     * @param {string}  [filename] Download file name, defaults to 'sam.wav'.
+     *
+     * @return void
+     */
+    downloadSong (song: SongSpec, callOptions?: SamInputOptions, filename?: string): void {
+      if (typeof window === 'undefined') {
+        throw new Error('SamJs.downloadSong() requires a browser environment (window/document/Blob). Use singSong() in Node instead.');
+      }
+      const merged = resolveOptions(opts, callOptions) as SamOptions;
+      const result = renderSong(song, merged);
+      if (result === false) {
+        throw new Error('SamJs.downloadSong(): could not parse the passed song.');
+      }
+      const blob = new Blob([result.wav.buffer as ArrayBuffer], { type: 'audio/vnd.wave' });
+      const url = (window.URL || window.webkitURL);
+      const fileURL = url.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = fileURL;
+      a.target = '_blank';
+      a.download = filename || 'sam.wav';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      url.revokeObjectURL(fileURL);
+    },
   };
 }
 
@@ -302,6 +416,8 @@ export interface SamJsFactory {
   buf32 (input: string, options?: SamOptions): SamBufferResult;
   /** Render and return a complete .wav file image (browser and Node). */
   toWav (input: string, options?: SamOptions): SamProcessResult;
+  /** Render a song through the smooth-stream renderer, see SongSpec. */
+  singSong (song: SongSpec, options?: SamOptions): SingSongResult | false;
 }
 
 /**
@@ -320,6 +436,12 @@ export interface SamJsInstance {
   toWav (text: string, callOptions?: SamInputOptions): SamProcessResult;
   /** Render and download the text as a .wav file (browser only). */
   download (text: string, callOptions?: SamInputOptions, filename?: string): void;
+  /** Render a song through the smooth-stream renderer, see SongSpec. */
+  singSong (song: SongSpec, callOptions?: SamInputOptions): SingSongResult | false;
+  /** Render a song (see singSong()) and play it. Resolves once playback finished. */
+  speakSong (song: SongSpec, callOptions?: SamInputOptions): Promise<boolean>;
+  /** Render a song (see singSong()) and download it as a .wav file (browser only). */
+  downloadSong (song: SongSpec, callOptions?: SamInputOptions, filename?: string): void;
 }
 
 // Attach the static helpers for functional use without instantiation, and
@@ -348,4 +470,7 @@ Object.assign(SamJs, {
   },
   /** Render and return a complete .wav file image (browser and Node). */
   toWav: (input: string, options?: SamOptions): SamProcessResult => renderWav(input, resolveOptions({}, options)),
+  /** Render a song through the smooth-stream renderer, see SongSpec. */
+  singSong: (song: SongSpec, options?: SamOptions): SingSongResult | false =>
+    renderSong(song, resolveOptions({}, options) as SamOptions),
 });

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import SamJs from 'samjs'
+import { DAISY_LYRICS, DAISY_SONG } from './daisy-song'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -48,7 +49,7 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]['value']
 
-type SingMode = 'classic' | 'melody'
+type SingMode = 'classic' | 'melody' | 'daisy'
 
 /** Lower the initial settings from URLSearchParams, if present. */
 function initialSettings(): {
@@ -75,7 +76,7 @@ function initialSettings(): {
     tab: params.get('tab') === 'sing' ? 'sing' : 'speak',
     text: params.get('t') ?? 'Hello , I am Sam.',
     singText: params.get('song') ?? DEFAULT_SING_TEXT,
-    singMode: params.get('sm') === 'm' ? 'melody' : 'classic',
+    singMode: params.get('sm') === 'm' ? 'melody' : params.get('sm') === 'c' ? 'classic' : 'daisy',
     melody: params.get('mel') ?? DEFAULT_MELODY,
     opts: {
       pitch: clamp('pitch', DEFAULT_OPTS.pitch),
@@ -160,7 +161,7 @@ export default function App() {
     params.set('tab', tab)
     params.set('t', text)
     params.set('song', singText)
-    params.set('sm', singMode === 'melody' ? 'm' : 'c')
+    params.set('sm', singMode === 'melody' ? 'm' : singMode === 'classic' ? 'c' : 'd')
     params.set('mel', melodyText)
     params.set('pitch', String(opts.pitch))
     params.set('speed', String(opts.speed))
@@ -197,7 +198,12 @@ export default function App() {
       }
       const samples =
         tab === 'sing'
-          ? orFallback(() => sam.buf8(singText, singOptions), false)
+          ? singMode === 'daisy'
+            ? orFallback(() => {
+                const rendered = sam.singSong(DAISY_SONG, { hq, masking })
+                return rendered === false ? false : rendered.buffer
+              }, false)
+            : orFallback(() => sam.buf8(singText, singOptions), false)
           : orFallback(() => sam.buf8(text, { hq, masking }), false)
       context.clearRect(0, 0, canvas.width, canvas.height)
       if (samples === false || samples.length === 0) {
@@ -244,7 +250,7 @@ export default function App() {
       context.stroke()
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [tab, text, singText, singOptions, sam, hq, masking])
+  }, [tab, text, singText, singMode, singOptions, sam, hq, masking])
 
   useEffect(() => {
     if (!copied) {
@@ -258,7 +264,11 @@ export default function App() {
     setSpeaking(true)
     try {
       if (tab === 'sing') {
-        await sam.speak(singText, singOptions)
+        if (singMode === 'daisy') {
+          await sam.speakSong(DAISY_SONG, { hq, masking })
+        } else {
+          await sam.speak(singText, singOptions)
+        }
       } else {
         await sam.speak(text, { hq, masking })
       }
@@ -269,7 +279,11 @@ export default function App() {
 
   function download() {
     if (tab === 'sing') {
-      sam.download(singText, { ...singOptions, bits }, fileNameOf(singText))
+      if (singMode === 'daisy') {
+        sam.downloadSong(DAISY_SONG, { hq, masking, bits }, fileNameOf('Daisy Bell'))
+      } else {
+        sam.download(singText, { ...singOptions, bits }, fileNameOf(singText))
+      }
     } else {
       sam.download(text, { phonetic: false, bits, hq, masking }, fileNameOf(text))
     }
@@ -285,7 +299,7 @@ export default function App() {
   }
 
   const input = tab === 'sing' ? singText : text
-  const inputEmpty = input.trim().length === 0
+  const inputEmpty = tab === 'sing' ? singMode === 'daisy' ? false : input.trim().length === 0 : input.trim().length === 0
   const melodyBroken = tab === 'sing' && singMode === 'melody' && !melodyOk
 
   return (
@@ -321,27 +335,38 @@ export default function App() {
             <CardHeader>
               <CardTitle>Singing synthesizer</CardTitle>
               <CardDescription>
-                Sing SAM phonemes with stress digits (the{' '}
+                Sing the Daisy Bell chorus exactly on its grid (the 1961 IBM
+                7094 homage), or enter SAM phonemes with stress digits (the{' '}
                 <code className="rounded bg-muted px-1">1</code>-
                 <code className="rounded bg-muted px-1">8</code> after each
-                phoneme are pitch steps), or assign one note per phoneme.
+                phoneme are pitch steps) and assign one note per phoneme.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="singinput">Phonemes to sing</Label>
-                <Input
-                  id="singinput"
-                  value={singText}
-                  onChange={(event) => setSingText(event.target.value)}
-                  placeholder={DEFAULT_SING_TEXT}
-                />
-              </div>
+              {singMode === 'daisy' ? (
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  {DAISY_LYRICS}{' '}
+                  Rendered exactly on the song&apos;s grid with the
+                  smooth-stream renderer (the 1961 IBM 7094 homage) — the
+                  speed slider sets the tempo.
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  <Label htmlFor="singinput">Phonemes to sing</Label>
+                  <Input
+                    id="singinput"
+                    value={singText}
+                    onChange={(event) => setSingText(event.target.value)}
+                    placeholder={DEFAULT_SING_TEXT}
+                  />
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-2">
                 <Label>Singing mode</Label>
                 <div className="flex gap-2" role="group" aria-label="Singing mode">
                   {([
+                    { value: 'daisy', label: 'Daisy (exact)' },
                     { value: 'classic', label: 'Classic digits' },
                     { value: 'melody', label: 'Melody notes' },
                   ] as const).map((mode) => (
